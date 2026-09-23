@@ -1,4 +1,4 @@
-import { styleChannel } from './channel-style.js';
+import { styleChannel, styleChannels } from './channel-style.js';
 import { PermissionFlagsBits as P, escapeMarkdown } from 'discord.js';
 import { config, saveConfig, welcomeText } from './config.js';
 import { settings, validateAutomod } from './automod.js';
@@ -14,7 +14,8 @@ export function createStaffTools({store,env,audit,backupNow,verification,tickets
     if(admin.includes(n)&&!actor.permissions.has(P.ManageGuild)) throw Error('Manage Server is required.');
     const save=patch=>saveConfig(store,patch,i.guild,actor,env);
     let result;
-    if(n==='channel-style') result=await styleChannel(i,actor,audit);
+    if(n==='channel-style-bulk') { await styleChannels(i,actor,audit); return true; }
+    else if(n==='channel-style') result=await styleChannel(i,actor,audit);
     else if(n==='config') { await save({[s('setting')]:s('id')==='-'?'':s('id')}); result='Saved. This setting takes effect immediately and overrides the Railway value. Run /setup-check to verify it.'; }
     else if(n==='welcome') {
       if(o.getString('text')) await save({welcomeText:s('text')});

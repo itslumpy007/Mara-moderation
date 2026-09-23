@@ -5,6 +5,13 @@ const user = {type:6,name:'user',description:'Member',required:true};
 const channel = {type:7,name:'channel',description:'Destination text channel',required:true,channel_types:[0]};
 const command = (name, description, options=[], permission) => ({name,description,options,dm_permission:false,...(permission ? {default_member_permissions:String(permission)} : {})});
 export const commands = [
+  command('channel-style-bulk','Preview or apply a matching style across multiple channels and categories',[
+    {type:3,name:'scope',description:'Which names to change',required:true,choices:[{name:'All channels and categories',value:'all'},{name:'All channels (no categories)',value:'channels'},{name:'All categories only',value:'categories'},{name:'Within one category (children only)',value:'category'}]},
+    {type:3,name:'style',description:'Lettering style',required:true,choices:nameStyles},
+    {type:3,name:'decoration',description:'Decoration (omitting removes Mara decorations)',required:false,choices:nameDecorations},
+    {type:7,name:'category',description:'Required for Within one category',required:false,channel_types:[4]},
+    {type:5,name:'apply',description:'True applies changes; omit or False for a private preview',required:false}
+  ],P.ManageChannels),
   command('channel-style','Preview or apply pretty lettering to a channel or category',[
     {type:7,name:'channel',description:'Channel or category to style',required:true,channel_types:nameChannelTypes},
     {type:3,name:'name',description:'Base name to style (enter ordinary letters)',required:true,min_length:1,max_length:100},

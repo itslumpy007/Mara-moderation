@@ -107,7 +107,7 @@ client.on('interactionCreate',async i => {
       const summary = await ai.summarize(s('text'));
       return await i.editReply({ content: `AI draft — verify against the original report.\n${summary}`, allowedMentions: { parse: [] } });
     }
-    if (n==='help') return await i.editReply('Mara • The Blacklisted\nModeration: /warn /warnings /warn-remove /case /history /timeout /untimeout /kick /ban /unban /purge\nSetup: /channel-style /setup-check /config /welcome /panel /rolepanel /automod /protection /verification /raid /escalation /backup\nTickets: /ticket-claim /ticket-transcript /ticket-ai /ticket-feedback /ticket-categories /close\nAI: /ai-summary /ai-context\nMembers: /custom /report\nStaff review: /verification-review\nMessages: /announce /custom-set /custom-delete');
+    if (n==='help') return await i.editReply('Mara • The Blacklisted\nModeration: /warn /warnings /warn-remove /case /history /timeout /untimeout /kick /ban /unban /purge\nSetup: /channel-style /channel-style-bulk /setup-check /config /welcome /panel /rolepanel /automod /protection /verification /raid /escalation /backup\nTickets: /ticket-claim /ticket-transcript /ticket-ai /ticket-feedback /ticket-categories /close\nAI: /ai-summary /ai-context\nMembers: /custom /report\nStaff review: /verification-review\nMessages: /announce /custom-set /custom-delete');
     if (['warn','warnings','timeout','untimeout','kick','ban'].includes(n)) {
       requirePermission(actor,n==='kick'?P.KickMembers:n==='ban'?P.BanMembers:P.ModerateMembers);
       const target=await i.guild.members.fetch(o.getUser('user',true).id);
