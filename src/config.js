@@ -2,6 +2,7 @@ import { ChannelType, PermissionFlagsBits as P } from 'discord.js';
 import { verificationProblem } from './setup-check.js';
 export const defaultConfig = {
   welcomeText: 'Welcome {user} to **{server}**! I’m Mara. Read the rules and use the verification panel to get started.',
+  verificationRules: "1. Treat everyone with respect. No harassment, bullying, threats, or hate speech.\n2. No spam, disruptive flooding, scams, malicious links, or unsolicited advertising.\n3. Protect privacy. Do not share anyone’s personal information without permission.\n4. Keep content appropriate. No sexual content, graphic violence, or illegal content.\n5. Use the correct channels and follow their topics.\n6. Follow Discord’s Terms of Service and Community Guidelines.\n7. Follow staff directions. Raise concerns respectfully through a private ticket.",
   minAccountDays: 0, captcha: false, warningThreshold: 0, warningTimeoutMinutes: 10,
   raidAction: 'off', raidJoins: 8, raidSeconds: 20, raidHoldMinutes: 10,
   ticketCategories: ['General support','Member report','Appeal'], aiContextReview: false
@@ -20,6 +21,7 @@ export function validateConfig(patch) {
     else if (Object.hasOwn(numbers,key)) { const [min,max]=numbers[key]; if(!Number.isInteger(value)||value<min||value>max) throw Error(key+' is outside its allowed range.'); }
     else if (['captcha','aiContextReview'].includes(key)) { if(typeof value!=='boolean') throw Error(key+' must be true or false.'); }
     else if (key==='raidAction') { if(!['off','alert','pause-verification'].includes(value)) throw Error('Invalid raid action.'); }
+    else if (key==='verificationRules') { if(typeof value!=='string'||!value.trim()||value.length>1500) throw Error('Rules must contain 1–1500 characters.'); }
     else if (key==='welcomeText') { if(typeof value!=='string'||!value.trim()||value.length>1500) throw Error('Welcome text must contain 1–1500 characters.'); }
     else if (key==='ticketCategories') { if(!Array.isArray(value)||!value.length||value.length>10||new Set(value).size!==value.length||value.some(v=>typeof v!=='string'||!v.trim()||v.length>60)) throw Error('Use 1–10 unique category names of 1–60 characters.'); }
     else throw Error('Unknown setting: '+key);

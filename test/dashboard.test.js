@@ -42,7 +42,8 @@ test('dashboard login state, CSRF, authorization, logout, and revocation are enf
  assert.equal((await post('/api/config',{minAccountDays:3})).status,200);assert.equal(store.get('config').minAccountDays,3);
  const stateResponse=await (await request('/api/state',{headers:{cookie}})).text();assert.equal(stateResponse.includes('never-expose'),false);assert.equal(stateResponse.includes('also-secret'),false);
  assert.equal((await post('/api/verify',{accepted:false})).status,400);assert.equal(grants,0);
- assert.equal((await post('/api/verify',{accepted:true})).status,200);assert.equal(grants,1);
+ assert.equal((await post('/api/verify',{accepted:true,rulesVersion:me.rulesVersion})).status,200);assert.equal(grants,1);
+ assert.equal((await post('/api/verify',{accepted:true,rulesVersion:'stale'})).status,400);assert.equal(grants,1);
  manager=false;
  assert.equal((await request('/api/state',{headers:{cookie}})).status,403);
  assert.equal((await post('/api/config',{minAccountDays:0})).status,403);

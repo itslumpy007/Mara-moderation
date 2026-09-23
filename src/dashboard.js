@@ -3,6 +3,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { PermissionFlagsBits as P } from 'discord.js';
 import { config, configurableIds, saveConfig } from './config.js';
+import { rulesVersion } from './verification.js';
 import { settings, validateAutomod } from './automod.js';
 
 const token=()=>randomBytes(32).toString('hex');
@@ -86,13 +87,14 @@ export function createDashboard({client,store,env,verification,audit,fetchImpl=f
         if(req.headers.origin!==base||!equal(req.headers['x-csrf-token'],session.csrf)) return json(res,403,{error:'Refresh the page before saving.'});
         if(!req.headers['content-type']?.startsWith('application/json')) return json(res,415,{error:'JSON required.'});
       } else if(req.method!=='GET') return json(res,405,{error:'Method not allowed'});
-      if(req.method==='GET'&&url.pathname==='/api/me') return json(res,200,{name:session.name,admin,csrf:session.csrf,captcha:config(store).captcha,siteKey:env.TURNSTILE_SITE_KEY||''});
+      if(req.method==='GET'&&url.pathname==='/api/me') return json(res,200,{name:session.name,admin,csrf:session.csrf,rules:config(store).verificationRules,rulesVersion:rulesVersion(config(store).verificationRules),captcha:config(store).captcha,siteKey:env.TURNSTILE_SITE_KEY||''});
       if(req.method==='POST'&&url.pathname==='/api/logout') {
         sessions.delete(sid);res.setHeader('Set-Cookie',cookie('mara_session','',0));return json(res,200,{ok:true});
       }
       if(req.method==='POST'&&url.pathname==='/api/verify') {
         const body=await readJSON(req); if(body.accepted!==true) throw Error('Accept the server rules first.');
         const cfg=config(store);
+        if(!cfg.verificationRules.trim() || body.rulesVersion!==rulesVersion(cfg.verificationRules)) throw Error('Refresh and read the current server rules before accepting.');
         if(cfg.captcha) await validateChallenge(body.token,env,fetchImpl);
         const result=await verification.grant(member,{captchaPassed:cfg.captcha});
         return json(res,200,{message:result});

@@ -28,6 +28,7 @@ export function createStaffTools({store,env,audit,backupNow,verification,tickets
     else if(n==='verification') {
       const patch={}; if(o.getInteger('minimum-days')!==null) patch.minAccountDays=o.getInteger('minimum-days');
       if(o.getBoolean('captcha')!==null) patch.captcha=o.getBoolean('captcha');
+      if(o.getString('rules')!==null) patch.verificationRules=o.getString('rules');
       await save(patch); const cfg=config(store);
       result='Minimum account age: '+cfg.minAccountDays+' days. CAPTCHA: '+(cfg.captcha?'on':'off')+'.';
     }

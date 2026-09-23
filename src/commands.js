@@ -17,7 +17,8 @@ export const commands = [
   ],P.ManageGuild),
   command('verification','Configure verification requirements',[
     {type:4,name:'minimum-days',description:'Minimum account age in days; 0 disables',min_value:0,max_value:365,required:false},
-    {type:5,name:'captcha',description:'Require the configured web CAPTCHA',required:false}
+    {type:5,name:'captcha',description:'Require the configured web CAPTCHA',required:false},
+    str('rules','Rules displayed before a member accepts verification',false)
   ],P.ManageGuild),
   command('verification-review','Approve or deny a requested verification exception',[
     user,{type:3,name:'action',description:'Decision',required:true,choices:[{name:'Approve',value:'approve'},{name:'Deny',value:'deny'}]},str('reason','Reason')

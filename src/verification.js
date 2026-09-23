@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { config } from './config.js';
 import { verificationProblem } from './setup-check.js';
 export function verificationGate(member,settings,pausedUntil=0,now=Date.now()) {
@@ -33,4 +34,12 @@ export function createVerification({store,env,audit}) {
     await audit(member.guild,'Verification review requested for '+member.id);
     return 'Your verification review is waiting for staff. Use /verification-review to check it (staff only).';
   }};
+}
+
+export function rulesVersion(text='') {
+  return createHash('sha256').update(text).digest('hex').slice(0,24);
+}
+export function rulesCard(settings) {
+  if(!settings.verificationRules?.trim()) throw Error('Server rules are not configured yet. Ask staff to set /verification rules.');
+  return {embeds:[{color:0x9B7BDA,title:'Before you join • Server rules',description:settings.verificationRules,footer:{text:'Read the rules, then accept to continue.'}}],components:[{type:1,components:[{type:2,style:3,label:'I accept the rules',custom_id:'verify-accept:'+rulesVersion(settings.verificationRules)}]}],allowedMentions:{parse:[]}};
 }

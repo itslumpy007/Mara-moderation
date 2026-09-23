@@ -9,7 +9,7 @@ import { logCard } from './log-style.js';
 import { setupCheck } from './setup-check.js';
 import { config, runtimeEnv, welcomeText } from './config.js';
 import { createDelivery, createBackups, privateChannel } from './reliability.js';
-import { createVerification, verificationGate } from './verification.js';
+import { createVerification, verificationGate, rulesVersion, rulesCard } from './verification.js';
 import { createTickets } from './tickets.js';
 import { createStaffTools } from './staff-tools.js';
 import { createRaidGuard } from './raid.js';
@@ -64,12 +64,14 @@ client.on('interactionCreate',async i => {
       if(i.customId==='ticket-confirm-close') return await tickets.close(i,actor,true);
       if(i.customId==='verify-review') return await i.editReply(await verification.request(actor));
       if (i.customId === 'ticket') return await i.editReply({content:'What can we help with?',components:[{type:1,components:[{type:3,custom_id:'ticket-category',placeholder:'Choose a ticket category',options:config(store).ticketCategories.map(name=>({label:name,value:name}))}]}]});
-      if (i.customId !== 'verify') throw new Error('Unknown button.');
+      if (i.customId !== 'verify' && !i.customId.startsWith('verify-accept:')) throw new Error('Unknown button.');
+      if(i.customId==='verify') return await i.editReply(rulesCard(config(store)));
+      if(i.customId !== 'verify-accept:'+rulesVersion(config(store).verificationRules)) return await i.editReply(rulesCard(config(store)));
       const cfg=config(store),gate=verificationGate(actor,cfg,store.get('raid:pausedUntil',0));
       if(gate) return await i.editReply({content:gate,components:row('verify-review','Request staff review')});
       if(cfg.captcha) {
         if(env.DASHBOARD_ENABLED!=='true'||!env.PUBLIC_BASE_URL) throw Error('Verification website is unavailable. Ask staff for help.');
-        return await i.editReply({content:'Continue with your Discord account to accept the rules and complete verification.',components:[{type:1,components:[{type:2,style:5,label:'Verify with Mara',url:new URL('/verify',env.PUBLIC_BASE_URL).href}]}]});
+        return await i.editReply({content:'Rules accepted. Continue with Discord on Mara’s verification page to complete the CAPTCHA.',components:[{type:1,components:[{type:2,style:5,label:'Verify with Mara',url:new URL('/verify',env.PUBLIC_BASE_URL).href}]}]});
       }
       return await i.editReply(await verification.grant(actor));
     }
@@ -146,15 +148,15 @@ client.on('interactionCreate',async i => {
               color: 0x9B7BDA,
               author: { name: 'MARA • THE BLACKLISTED', icon_url: client.user.displayAvatarURL() },
               title: 'Your place in The Blacklisted starts here.',
-              description: 'Welcome in. I’m **Mara**, your server guide.\nRead our server rules, then accept them below to receive your member role.',
+              description: 'Welcome in. I’m **Mara**, your server guide.\nClick Verify to view the rules, accept them, and complete any required CAPTCHA.',
               fields: [
                 { name: '01  •  Read the rules', value: 'Take a moment to review the server rules before joining the conversation.' },
-                { name: '02  •  Make it official', value: 'Click **Accept rules & verify** to confirm you agree to follow them.' },
+                { name: '02  •  Make it official', value: 'Accept the rules in the private message, then complete CAPTCHA if enabled.' },
                 { name: 'Need a hand?', value: 'If verification fails, contact a staff member and they’ll help you get settled.' }
               ],
-              footer: { text: 'Rules acceptance only • No age or identity checks' }
+              footer: { text: 'Rules acceptance + optional CAPTCHA • Does not prove age or identity' }
             }],
-            components: [{ type: 1, components: [{ type: 2, style: 3, custom_id: 'verify', label: 'Accept rules & verify', emoji: { name: '✅' } }] }]
+            components: [{ type: 1, components: [{ type: 2, style: 3, custom_id: 'verify', label: 'Verify', emoji: { name: '✅' } }] }]
           };
           if(o.getBoolean('preview')) { for(const row of panel.components) for(const component of row.components) component.disabled=true; return await i.editReply(panel); }
           await c.send(panel);
