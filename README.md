@@ -19,6 +19,14 @@ Invite Mara with bot and applications.commands scopes. Grant View Channels, Send
 
 Run `/help` and `/setup-check`. Use `/config` to save channels and roles directly in Discord; `/welcome` customizes the greeting. `/panel` posts verification or ticket panels and supports private previews. Make logs staff-only and restrict member channels to Verified if verification should control access. Rules acceptance and CAPTCHA do not establish age or identity.
 
+## Channel and category lettering
+
+Use `/channel-style` to choose a channel or category, enter its base name, and pick Plain, Small caps, Bold serif, or Monospace. Add an optional star, flower, or diamond decoration. The default is a private preview; repeat with `apply:True` to rename the selected channel.
+
+Example: `/channel-style channel:#general name:general style:small-caps decoration:star` previews **✦・ɢᴇɴᴇʀᴀʟ**. Categories and voice channels retain spaces and case; text channel spaces become hyphens. These are Unicode letters, not installed fonts; rendering, screen readers, and name search may differ across clients. Choose Plain with an undecorated base name to return to ordinary lettering.
+
+You and Mara need View Channel and Manage Channels on the selected channel/category. Only its name changes; IDs, permissions, and category placement stay intact. Run `npm run register` after deploying this update to make the new command available.
+
 ## Railway
 
 Deploy this repository using its Dockerfile. Add a persistent volume at `/data` and set `DATA_DIR=/data`, together with the Discord settings from `.env`. Use one replica and leave Serverless off. Stop any local copy before starting Railway. Look for `Mara online as ...` in deployment logs.

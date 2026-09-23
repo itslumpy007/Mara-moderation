@@ -1,9 +1,17 @@
+import { nameStyles, nameDecorations, nameChannelTypes } from './channel-style.js';
 import { PermissionFlagsBits as P } from 'discord.js';
 const str = (name, description, required = true) => ({type:3,name,description,required,max_length:1500});
 const user = {type:6,name:'user',description:'Member',required:true};
 const channel = {type:7,name:'channel',description:'Destination text channel',required:true,channel_types:[0]};
 const command = (name, description, options=[], permission) => ({name,description,options,dm_permission:false,...(permission ? {default_member_permissions:String(permission)} : {})});
 export const commands = [
+  command('channel-style','Preview or apply pretty lettering to a channel or category',[
+    {type:7,name:'channel',description:'Channel or category to style',required:true,channel_types:nameChannelTypes},
+    {type:3,name:'name',description:'Base name to style (enter ordinary letters)',required:true,min_length:1,max_length:100},
+    {type:3,name:'style',description:'Lettering style',required:true,choices:nameStyles},
+    {type:3,name:'decoration',description:'Optional symbol before the name',required:false,choices:nameDecorations},
+    {type:5,name:'apply',description:'True renames the channel; omit or False to preview privately',required:false}
+  ],P.ManageChannels),
   command('config','Set Mara channels and roles without editing Railway variables',[
     {type:3,name:'setting',description:'Setting to change',required:true,choices:['LOG_CHANNEL_ID','WELCOME_CHANNEL_ID','VERIFIED_ROLE_ID','UNVERIFIED_ROLE_ID','STAFF_ROLE_ID','TICKET_CATEGORY_ID'].map(value=>({name:value,value}))},
     str('id','Channel or role ID; use - to clear')
