@@ -4,11 +4,11 @@ import { PermissionsBitField, PermissionFlagsBits as P } from 'discord.js';
 import { baseName, styledName, styleChannels, nameStyles } from '../src/channel-style.js';
 import { commands } from '../src/commands.js';
 
-function fixture({scope='all',apply=false,category=null,denied=[],fail=[],style='small-caps',decoration='star'}={}) {
+function fixture({scope='all',apply=false,category=null,denied=[],fail=[],style='small-caps',decoration='star',divider='none'}={}) {
  const changed=[],replies=[],logs=[];
  const channels=new Map([['cat',4,'Community',null],['general',0,'general','cat'],['voice',2,'Lounge','cat'],['other',0,'other',null],['thread',11,'thread','cat']].map(([id,type,name,parentId])=>[id,{id,type,name,parentId,guildId:'guild',permissionsFor:()=>new PermissionsBitField(denied.includes(id)?[]:[P.ViewChannel,P.ManageChannels]),setName:async function(name){if(fail.includes(id))throw Error('Rename failed');changed.push(id);this.name=name;return this;}}]));
  const actor={id:'staff'};
- const i={guild:{id:'guild',channels:{fetch:async id=>id?channels.get(id):channels},members:{fetch:async()=>actor,fetchMe:async()=>({id:'bot'})}},options:{getString:key=>({scope,style,decoration}[key]),getBoolean:()=>apply,getChannel:()=>category?{id:category}:null},editReply:async reply=>replies.push(reply)};
+ const i={guild:{id:'guild',channels:{fetch:async id=>id?channels.get(id):channels},members:{fetch:async()=>actor,fetchMe:async()=>({id:'bot'})}},options:{getString:key=>({scope,style,decoration,divider}[key]),getBoolean:()=>apply,getChannel:()=>category?{id:category}:null},editReply:async reply=>replies.push(reply)};
  return {i,actor,channels,changed,replies,logs,audit:async(...args)=>logs.push(args)};
 }
 const run=f=>styleChannels(f.i,f.actor,f.audit);
@@ -111,4 +111,40 @@ test('bulk can switch from script to Gothic and then plain',async()=>{
  f.i.options.getString=key=>({scope:'all',style:'plain',decoration:'none'}[key]);await run(f);
  assert.equal(f.channels.get('general').name,'general');
  assert.equal(f.channels.get('cat').name,'Community');
+});
+
+
+test('category dividers frame names, restyle cleanly and enforce length',()=>{
+ assert.equal(styledName('COMMUNITY','plain','none',4,'stars'),'━━ ✦ COMMUNITY ✦ ━━');
+ assert.equal(styledName('Community','plain','none',4,'lines'),'━━ Community ━━');
+ assert.equal(styledName('Community','plain','none',4,'brackets'),'╭── Community ──╮');
+ for(const divider of ['lines','stars','brackets']) {
+  const name=styledName('Community','bold','star',4,divider);
+  assert.equal(baseName(name),'Community');
+  assert.equal(styledName(baseName(name),'bold','star',4,divider),name);
+ }
+ assert.equal(styledName('━━ ✦ COMMUNITY ✦ ━━','plain','none',4,'brackets'),'╭── COMMUNITY ──╮');
+ assert.throws(()=>styledName('general','plain','none',0,'stars'),/categories only/);
+ assert.throws(()=>styledName('Community','plain','none',4,'invalid'),/supported/);
+ assert.throws(()=>styledName('a'.repeat(95),'plain','none',4,'stars'),/too long/);
+ assert.equal(baseName('✦ Community ✦'),'✦ Community ✦');
+});
+
+test('bulk category dividers preview then apply without touching child names',async()=>{
+ const f=fixture({scope:'categories',style:'plain',decoration:'none',divider:'stars'});
+ await run(f);assert.equal(f.changed.length,0);
+ assert.match(f.replies.at(-1).files[0].attachment.toString(),/━━ ✦ Community ✦ ━━/);
+ f.i.options.getBoolean=()=>true;await run(f);
+ assert.deepEqual(f.changed,['cat']);assert.equal(f.channels.get('general').name,'general');
+ await run(f);assert.deepEqual(f.changed,['cat']);
+ f.i.options.getString=key=>({scope:'categories',style:'plain',decoration:'none',divider:'none'}[key]);
+ await run(f);assert.equal(f.channels.get('cat').name,'Community');
+});
+
+test('all scope frames only categories and rejects divider with children-only scopes',async()=>{
+ const f=fixture({apply:true,divider:'stars'});await run(f);
+ assert.equal(f.channels.get('cat').name,'━━ ✦ ✦・ᴄᴏᴍᴍᴜɴɪᴛʏ ✦ ━━');
+ assert.equal(f.channels.get('general').name,'✦・ɢᴇɴᴇʀᴀʟ');
+ for(const scope of ['channels','category']) await assert.rejects(run(fixture({scope,category:scope==='category'?'cat':null,divider:'stars'})),/use dividers/);
+ for(const name of ['channel-style','channel-style-bulk']) assert.equal(commands.find(c=>c.name===name).options.find(o=>o.name==='divider').choices.length,4);
 });

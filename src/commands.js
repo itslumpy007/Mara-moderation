@@ -1,4 +1,4 @@
-import { nameStyles, nameDecorations, nameChannelTypes } from './channel-style.js';
+import { nameStyles, nameDecorations, nameChannelTypes, categoryDividers } from './channel-style.js';
 import { PermissionFlagsBits as P } from 'discord.js';
 const str = (name, description, required = true) => ({type:3,name,description,required,max_length:1500});
 const user = {type:6,name:'user',description:'Member',required:true};
@@ -9,6 +9,7 @@ export const commands = [
     {type:3,name:'scope',description:'Which names to change',required:true,choices:[{name:'All channels and categories',value:'all'},{name:'All channels (no categories)',value:'channels'},{name:'All categories only',value:'categories'},{name:'Within one category (children only)',value:'category'}]},
     {type:3,name:'style',description:'Lettering style',required:true,choices:nameStyles},
     {type:3,name:'decoration',description:'Decoration (omitting removes Mara decorations)',required:false,choices:nameDecorations},
+    {type:3,name:'divider',description:'Frame category names only; None removes existing Mara dividers',required:false,choices:categoryDividers},
     {type:7,name:'category',description:'Required for Within one category',required:false,channel_types:[4]},
     {type:5,name:'apply',description:'True applies changes; omit or False for a private preview',required:false}
   ],P.ManageChannels),
@@ -17,6 +18,7 @@ export const commands = [
     {type:3,name:'name',description:'Base name to style (enter ordinary letters)',required:true,min_length:1,max_length:100},
     {type:3,name:'style',description:'Lettering style',required:true,choices:nameStyles},
     {type:3,name:'decoration',description:'Optional symbol before the name',required:false,choices:nameDecorations},
+    {type:3,name:'divider',description:'Decorative frame (categories only)',required:false,choices:categoryDividers},
     {type:5,name:'apply',description:'True renames the channel; omit or False to preview privately',required:false}
   ],P.ManageChannels),
   command('config','Set Mara channels and roles without editing Railway variables',[

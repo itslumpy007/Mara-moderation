@@ -17,6 +17,21 @@ export const nameDecorations = [
   {name:'None',value:'none'}, {name:'Star · ✦・',value:'star'},
   {name:'Flower · ❀・',value:'flower'}, {name:'Diamond · ◇・',value:'diamond'}
 ];
+export const categoryDividers = [
+  {name:'None',value:'none'},
+  {name:'Lines · ━━ Community ━━',value:'lines'},
+  {name:'Stars · ━━ ✦ Community ✦ ━━',value:'stars'},
+  {name:'Brackets · ╭── Community ──╮',value:'brackets'}
+];
+const dividerFrames={none:['',''],lines:['━━ ',' ━━'],stars:['━━ ✦ ',' ✦ ━━'],brackets:['╭── ',' ──╮']};
+function withoutDivider(name) {
+  // Match the more specific star frame before the plain line frame.
+  for(const key of ['stars','brackets','lines']) {
+    const [left,right]=dividerFrames[key];
+    if(name.startsWith(left)&&name.endsWith(right)) return name.slice(left.length,-right.length);
+  }
+  return name;
+}
 export const nameChannelTypes = [0,2,4,5,13,15,16];
 const prefixes = {none:'',star:'✦・',flower:'❀・',diamond:'◇・'};
 const smallCaps = Array.from('ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘǫʀꜱᴛᴜᴠᴡxʏᴢ');
@@ -42,19 +57,22 @@ const letterMaps={
 const ordinaryLetters=new Map(Object.values(letterMaps).flatMap(map=>Array.from(map,([plain,styled])=>[styled,plain])));
 
 
-export function styledName(name,style='plain',decoration='none',type=0) {
+export function styledName(name,style='plain',decoration='none',type=0,divider='none') {
   if(!nameStyles.some(s=>s.value===style)||!Object.hasOwn(prefixes,decoration)) throw Error('Choose a supported name style and decoration.');
+  if(!Object.hasOwn(dividerFrames,divider)) throw Error('Choose a supported category divider.');
+  if(divider!=='none'&&type!==4) throw Error('Dividers are for categories only.');
   if(!nameChannelTypes.includes(type)) throw Error('Choose a server channel or category, not a thread.');
   if(typeof name!=='string'||/[\p{Cc}\p{Cf}]/u.test(name)) throw Error('Enter a name without control or invisible formatting characters.');
-  let base=name.trim();
+  let base=type===4?withoutDivider(name.trim()):name.trim();
   if(!base) throw Error('Enter a name first.');
   if([0,5,15,16].includes(type)) base=base.toLowerCase().replace(/\s+/gu,'-');
   const letters=Array.from(base,c=>{
     if(style==='small-caps'&&/[a-z]/i.test(c)) return smallCaps[c.toLowerCase().charCodeAt(0)-97];
     return letterMaps[style]?.get(c)||c;
   }).join('');
-  const result=prefixes[decoration]+letters;
-  if(result.length>100) throw Error('The styled name is too long. Use a shorter name (maximum 100 UTF-16 units including decoration).');
+  const [left,right]=dividerFrames[divider];
+  const result=left+prefixes[decoration]+letters+right;
+  if(result.length>100) throw Error('The styled name is too long. Use a shorter name (maximum 100 UTF-16 units including decoration and divider).');
   return result;
 }
 
@@ -63,7 +81,7 @@ export async function styleChannel(i,actor,audit) {
   const channel=await i.guild.channels.fetch(selected.id);
   if(!channel||channel.guildId!==i.guild.id||!nameChannelTypes.includes(channel.type)) throw Error('Choose an existing channel or category in this server.');
   if(!channel.permissionsFor(actor)?.has([P.ViewChannel,P.ManageChannels])) throw Error('You need View Channel and Manage Channels on the selected channel or category.');
-  const name=styledName(i.options.getString('name',true),i.options.getString('style',true),i.options.getString('decoration')||'none',channel.type);
+  const name=styledName(i.options.getString('name',true),i.options.getString('style',true),i.options.getString('decoration')||'none',channel.type,i.options.getString('divider')||'none');
   const oldName=channel.name;
   if(i.options.getBoolean('apply')!==true) return 'Name preview: '+escapeMarkdown(oldName)+' → '+escapeMarkdown(name)+'\nRun the same command with apply:True to rename this channel or category. Decorative letters may look different across devices.';
   const me=await i.guild.members.fetchMe();
@@ -76,6 +94,7 @@ export async function styleChannel(i,actor,audit) {
 
 // Decode only lettering and prefixes supported by Mara; preserve other symbols.
 export function baseName(name) {
+  name=withoutDivider(name);
   for(const prefix of Object.values(prefixes).filter(Boolean)) {
     while(name.startsWith(prefix)) name=name.slice(prefix.length);
   }
@@ -91,10 +110,12 @@ export async function styleChannels(i,actor,audit) {
   const scope=i.options.getString('scope',true),style=i.options.getString('style',true);
   const decoration=i.options.getString('decoration')||'none',apply=i.options.getBoolean('apply')===true;
   const category=i.options.getChannel('category');
+  const divider=i.options.getString('divider')||'none';
+  if(divider!=='none'&&!['all','categories'].includes(scope)) throw Error('Choose All categories or All channels and categories to use dividers.');
   if(!['all','channels','categories','category'].includes(scope)) throw Error('Choose a valid scope.');
   if(scope==='category'&&!category) throw Error('Select a category for this scope.');
   if(scope!=='category'&&category) throw Error('Use the Within one category scope when selecting a category.');
-  styledName('check',style,decoration);
+  styledName('check',style,decoration,4,divider);
   if(bulkRuns.has(i.guild.id)) throw Error('A bulk rename is already running in this server. Wait for it to finish.');
   if(apply) bulkRuns.add(i.guild.id);
   try {
@@ -112,7 +133,7 @@ export async function styleChannels(i,actor,audit) {
       if(!channel.permissionsFor(actor)?.has([P.ViewChannel,P.ManageChannels])) {skipped++;continue;}
       if(!channel.permissionsFor(me)?.has([P.ViewChannel,P.ManageChannels])) {skipped++;report.push('SKIPPED '+channel.name+': Mara needs View Channel and Manage Channels.');continue;}
       try {
-        const name=styledName(baseName(channel.name),style,decoration,channel.type);
+        const name=styledName(baseName(channel.name),style,decoration,channel.type,channel.type===4?divider:'none');
         if(name===channel.name) {unchanged++;continue;}
         plan.push({id:channel.id,before:channel.name,name});
       } catch(error) {skipped++;report.push('SKIPPED '+channel.name+': '+error.message);}

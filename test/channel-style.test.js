@@ -61,3 +61,12 @@ test('command registration requires Manage Channels and permits categories',()=>
   assert.ok(command.options.find(o=>o.name==='channel').channel_types.includes(4));
   assert.equal(command.options.find(o=>o.name==='apply').required,false);
 });
+
+
+test('single category command previews chosen divider',async()=>{
+ const f=fixture();
+ const get=f.interaction.options.getString;
+ f.interaction.options.getString=key=>key==='divider'?'stars':get(key);
+ assert.match(await styleChannel(f.interaction,f.actor,f.audit),/━━ ✦ ✦・ᴡᴇʟᴄᴏᴍᴇ ✦ ━━/);
+ assert.equal(f.changes.length,0);
+});

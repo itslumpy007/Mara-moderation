@@ -29,6 +29,8 @@ You and Mara need View Channel and Manage Channels on the selected channel/categ
 
 Bulk styling: use `/channel-style-bulk scope:all style:small-caps decoration:star` for a private preview file of every proposed rename. Scopes include all names, channels only, categories only, or children within a selected category. Repeat with `apply:True` to apply. Existing Mara lettering and decorations are replaced instead of stacked; unrelated emoji and symbols are preserved. Plain with no decoration removes Mara styling (original capitalization cannot be recovered from small caps). Names you cannot manage are skipped. Changes run sequentially with a per-server lock and produce a results file listing failures; retrying skips names already in the requested style. Discord rate limits can delay completion. No channels are moved and permissions stay unchanged.
 
+Category dividers: choose `divider:stars`, `divider:lines`, or `divider:brackets` in either styling command to create headings such as **━━ ✦ COMMUNITY ✦ ━━**. For every category, preview `/channel-style-bulk scope:categories style:plain divider:stars`, then repeat with `apply:True`. Lettering styles work inside dividers. Omit decoration for a clean frame. Existing Mara dividers are replaced, and `divider:none` removes them. With scope all, only categories receive frames. This formats current category names when you run the command; it does not create categories or automatically format future ones.
+
 ## Railway
 
 Deploy this repository using its Dockerfile. Add a persistent volume at `/data` and set `DATA_DIR=/data`, together with the Discord settings from `.env`. Use one replica and leave Serverless off. Stop any local copy before starting Railway. Look for `Mara online as ...` in deployment logs.
