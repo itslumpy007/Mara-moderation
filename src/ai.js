@@ -1,5 +1,6 @@
 export function createAI(env, { fetchImpl = fetch, now = Date.now } = {}) {
   const channels = new Set((env.AI_CHANNEL_IDS || '').split(',').map(s => s.trim()).filter(Boolean));
+  const allChannels = [...channels].some(channel => channel.toLowerCase() === 'all');
   let windowStart = now(), count = 0, active = 0;
   async function request(endpoint, body) {
     if (env.AI_ENABLED !== 'true' || !env.OPENAI_API_KEY) throw new Error('AI is disabled. Configure AI_ENABLED and OPENAI_API_KEY.');
@@ -16,7 +17,8 @@ export function createAI(env, { fetchImpl = fetch, now = Date.now } = {}) {
     } finally { active--; }
   }
   return {
-    canReview: channelId => env.AI_ENABLED === 'true' && !!env.OPENAI_API_KEY && channels.has(channelId),
+    channelScope: allChannels ? 'all eligible channels' : channels.size ? 'selected channels only' : 'staff commands only',
+    canReview: channelId => env.AI_ENABLED === 'true' && !!env.OPENAI_API_KEY && (allChannels || channels.has(channelId)),
     async review(text) {
       const data = await request('moderations', { model: 'omni-moderation-latest', input: text.slice(0,4000) });
       const result = data.results?.[0];

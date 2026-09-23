@@ -25,7 +25,7 @@ Deploy this repository using its Dockerfile. Add a persistent volume at `/data` 
 
 The bot runs without a public domain. For the optional dashboard and CAPTCHA, follow [the dashboard setup](ROADMAP-RELEASE.md#dashboard-setup-on-railway). The web server starts only when DASHBOARD_ENABLED=true. Use /health as an optional health check only in that mode.
 
-AI needs an OpenAI API key and a configured text model. Automated scanning is restricted to AI_CHANNEL_IDS; contextual scanning is separately enabled. AI output is advisory. See the full guide for data sharing and rate limits.
+AI needs an OpenAI API key and a configured text model. AI_CHANNEL_IDS accepts comma-separated channel IDs, all for every eligible channel Mara can read (including private channels), or blank for staff commands only. Automod exemptions still apply; contextual scanning is separately enabled. AI output is advisory. See the full guide for data sharing and rate limits.
 
 ## Data and upgrades
 

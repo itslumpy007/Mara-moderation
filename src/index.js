@@ -98,7 +98,7 @@ client.on('interactionCreate',async i => {
       if (words !== null) config.blockedWords = words === '-' ? [] : [...new Set(words.split(',').map(w=>w.trim()).filter(Boolean))];
       if (config.enabled && !env.LOG_CHANNEL_ID) throw new Error('Configure LOG_CHANNEL_ID before enabling automod.');
       store.set('automod', validateAutomod(config));
-      return await i.editReply(`Automod: ${config.enabled ? 'on' : 'off'} | action: ${config.action}\nInvites: ${config.blockInvites ? 'blocked' : 'allowed'} | mention limit: ${config.mentionLimit} | flood: ${config.spamLimit} messages / 10 seconds\nBlocked phrases: ${config.blockedWords.length}\nAI review: ${env.AI_ENABLED === 'true' && env.OPENAI_API_KEY ? 'configured; selected channels only' : 'off'}`);
+      return await i.editReply(`Automod: ${config.enabled ? 'on' : 'off'} | action: ${config.action}\nInvites: ${config.blockInvites ? 'blocked' : 'allowed'} | mention limit: ${config.mentionLimit} | flood: ${config.spamLimit} messages / 10 seconds\nBlocked phrases: ${config.blockedWords.length}\nAI review: ${env.AI_ENABLED === 'true' && env.OPENAI_API_KEY ? ai.channelScope : 'off'}`);
     }
     if (n === 'ai-summary') {
       requirePermission(actor, P.ModerateMembers);

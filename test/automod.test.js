@@ -97,3 +97,15 @@ test('AI rejects service errors, malformed responses and excess requests',async(
   await assert.rejects(ai.review('text'),/busy/);
   time+=60000; await ai.review('text');
 });
+
+test('AI all-channel opt-in preserves disabled and blank scope behavior',()=>{
+ const env={AI_ENABLED:'true',OPENAI_API_KEY:'test'};
+ for(const scope of ['all',' ALL ','public,all']) {
+ const ai=createAI({...env,AI_CHANNEL_IDS:scope});
+ assert.equal(ai.canReview('new-channel'),true);
+ assert.equal(ai.channelScope,'all eligible channels');
+ }
+ for(const patch of [{AI_CHANNEL_IDS:''},{AI_CHANNEL_IDS:'all',AI_ENABLED:'false'},{AI_CHANNEL_IDS:'all',OPENAI_API_KEY:''},{AI_CHANNEL_IDS:'almost-all'}]) {
+ assert.equal(createAI({...env,...patch}).canReview('new-channel'),false);
+ }
+});

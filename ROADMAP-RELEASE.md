@@ -79,7 +79,7 @@ CAPTCHA is a bot challenge, not age or identity verification. Do not collect ide
 AI_ENABLED=true and OPENAI_API_KEY enable the provider. Set AI_MODEL to an available Responses API text model. Keys remain in Railway.
 
 - /ticket-ai mode:Summary or Suggested reply sends up to 4000 characters from the most recent 50 ticket messages to OpenAI. Only ticket staff with channel access can run it. Outputs are private drafts and never auto-post as staff replies.
-- /ai-context enabled:true lets Mara retrieve up to six recent messages after a moderation flag, only in AI_CHANNEL_IDS. Automated review also requires /automod enabled:true.
+- /ai-context enabled:true lets Mara retrieve up to six recent messages after a moderation flag, within the AI_CHANNEL_IDS scope. Automated review also requires /automod enabled:true.
 - The existing two-concurrent / twenty-per-minute request cap and timeouts apply across all AI features. Notify members about which message/ticket text is shared with the provider.
 
 ## Data, delivery, and recovery
@@ -100,3 +100,6 @@ Automated tests cover migration/restart persistence, backup restore, warning rev
 Live Discord permission flows, real OAuth and Turnstile credentials, AI provider calls, and Railway deployment still require an integration check after configuration. No credentials are included in this repository.
 
 References: [Discord OAuth2](https://docs.discord.com/developers/topics/oauth2), [Cloudflare server validation](https://developers.cloudflare.com/turnstile/get-started/server-side-validation/), [Railway volumes](https://docs.railway.com/volumes).
+
+### All-channel AI review
+Set AI_CHANNEL_IDS=all in Railway and deploy to review new eligible messages across the configured server, including private channels Mara can read. This does not scan historical messages. Blank disables automatic AI scanning; comma-separated IDs restrict it. Requires AI_ENABLED=true, OPENAI_API_KEY, and /automod enabled:true. Existing staff, bot, webhook, log-channel and configured channel/category exemptions still apply. Local-rule matches are handled before AI. The existing limit of 20 AI requests/minute and two concurrent requests remains; excess requests are skipped. Notify members that reviewed message text is sent to OpenAI.
