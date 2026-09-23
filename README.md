@@ -4,6 +4,10 @@ JavaScript Discord bot, prepared for Railway. One Discord server, one running in
 
 ## Features
 
+New staff tools: `/setup-check` returns a private configuration report with specific channel and role fixes (Manage Server required). `/untimeout user:... reason:...` removes a timeout and records the action (Moderate Members required; member hierarchy still applies). Verification now explains the precise configuration problem and recognizes already-verified members.
+
+After updating, run `npm run register` once with the existing bot credentials to publish the new commands, then restart or redeploy Mara. The registration command does not start a second bot process. Run `/setup-check` after deployment. It checks configured resources but does not certify channel privacy or verify that a Railway volume is attached.
+
 - Moderation: warnings, warning history, timeouts, kicks, bans, recent-message purge.
 - Logging: Mara moderation actions, joins/leaves, cached message edits/deletions.
 - Welcome messages and button-based rules acceptance.

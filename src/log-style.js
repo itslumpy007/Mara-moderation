@@ -5,6 +5,7 @@ const themes = {
   LEAVE: ['Member left', 0x95A1B5, '↗️'],
   WARN: ['Warning issued', 0xF2C66D, '⚠️'],
   TIMEOUT: ['Member timed out', 0xEDA46B, '⏳'],
+  UNTIMEOUT: ['Timeout removed', 0x57C99B, '✅'],
   KICK: ['Member kicked', 0xEC9279, '🚪'],
   BAN: ['Member banned', 0xE86F86, '🔨'],
   PURGE: ['Messages cleared', 0x7AA9EB, '🧹'],
@@ -34,7 +35,7 @@ export function logCard(text, avatarURL) {
   const member = (name, id) => fields.push({ name, value: /^\d+$/.test(id) ? `<@${id}>\n\`${id}\`` : safe(id), inline: true });
   let description;
 
-  if (['WARN','TIMEOUT','KICK','BAN'].includes(type)) {
+  if (['WARN','TIMEOUT','UNTIMEOUT','KICK','BAN'].includes(type)) {
     member('Member', parts[1].replace('target ', ''));
     member('Moderator', parts[2].replace('staff ', ''));
     field('Reason', parts.slice(3).join(' | '), false);

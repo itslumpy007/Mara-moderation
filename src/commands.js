@@ -4,6 +4,8 @@ const user = {type:6,name:'user',description:'Member',required:true};
 const channel = {type:7,name:'channel',description:'Destination text channel',required:true,channel_types:[0]};
 const command = (name, description, options=[], permission) => ({name,description,options,dm_permission:false,...(permission ? {default_member_permissions:String(permission)} : {})});
 export const commands = [
+  command('setup-check','Check Mara’s channels, role order and permissions',[],P.ManageGuild),
+  command('untimeout','Remove a member’s timeout',[user,str('reason','Reason')],P.ModerateMembers),
   command('automod','View or configure Mara automod',[
     {type:5,name:'enabled',description:'Enable message checks',required:false},
     {type:3,name:'action',description:'Action for local rule matches',required:false,choices:[{name:'Log only',value:'log'},{name:'Delete message',value:'delete'}]},

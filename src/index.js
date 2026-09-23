@@ -6,6 +6,7 @@ import { canTarget, safeRole } from './security.js';
 import { createAutomod, settings } from './automod.js';
 import { createAI } from './ai.js';
 import { logCard } from './log-style.js';
+import { setupCheck, verificationProblem } from './setup-check.js';
 for (const key of ['DISCORD_TOKEN','GUILD_ID']) if (!process.env[key]) throw new Error(`Missing ${key}`);
 if (process.env.RAILWAY_ENVIRONMENT_ID && process.env.DATA_DIR !== '/data') throw new Error('Set DATA_DIR=/data and attach a Railway volume at /data.');
 const env = process.env;
@@ -66,7 +67,9 @@ client.on('interactionCreate',async i => {
       if (i.customId === 'ticket') return await ticket(i);
       if (i.customId !== 'verify') throw new Error('Unknown button.');
       const role = await i.guild.roles.fetch(env.VERIFIED_ROLE_ID || '0');
-      if (!safeRole(role,me)) throw new Error('Verification role is missing, privileged, or above Mara. Ask an administrator.');
+      const problem = verificationProblem(role, me);
+      if (problem) throw new Error(`Verification is not ready. Ask a server administrator to fix this: ${problem}`);
+      if (actor.roles.cache.has(role.id)) return await i.editReply('You’re already verified. Welcome back to The Blacklisted.');
       await actor.roles.add(role,'Member accepted the server rules');
       await audit(i.guild,`Rules accepted: ${i.user.tag}`);
       return await i.editReply('You’re verified. Welcome to The Blacklisted.');
@@ -74,6 +77,13 @@ client.on('interactionCreate',async i => {
     const n=i.commandName, o=i.options;
     const reason=o.getString('reason');
     const s = name => o.getString(name,true);
+    if (n === 'setup-check') {
+      requirePermission(actor, P.ManageGuild);
+      const card = await setupCheck(i.guild, env, me);
+      return await i.editReply(i.channel?.permissionsFor(me)?.has(P.EmbedLinks)
+        ? { embeds:[card], allowedMentions:{parse:[]} }
+        : { content:card.fields.map(f=>`${f.name}\n${f.value}`).join('\n\n').slice(0,2000), allowedMentions:{parse:[]} });
+    }
     if (n === 'automod') {
       requirePermission(actor, P.ManageGuild);
       const config = settings(store);
@@ -95,8 +105,8 @@ client.on('interactionCreate',async i => {
       const summary = await ai.summarize(s('text'));
       return await i.editReply({ content: `AI draft — verify against the original report.\n${summary}`, allowedMentions: { parse: [] } });
     }
-    if (n==='help') return await i.editReply('Mara • The Blacklisted\nStaff: /warn /warnings /timeout /kick /ban /purge /ai-summary\nSetup: /panel /rolepanel /announce /custom-set /custom-delete /automod\nMembers: /custom /report /close\nVerification means accepting rules, not proving age or identity.');
-    if (['warn','warnings','timeout','kick','ban'].includes(n)) {
+    if (n==='help') return await i.editReply('Mara • The Blacklisted\nStaff: /warn /warnings /timeout /untimeout /kick /ban /purge /ai-summary\nSetup: /setup-check /panel /rolepanel /announce /custom-set /custom-delete /automod\nMembers: /custom /report /close\nVerification means accepting rules, not proving age or identity.');
+    if (['warn','warnings','timeout','untimeout','kick','ban'].includes(n)) {
       requirePermission(actor,n==='kick'?P.KickMembers:n==='ban'?P.BanMembers:P.ModerateMembers);
       const target=await i.guild.members.fetch(o.getUser('user',true).id);
       const key=`warnings:${target.id}`;
@@ -105,6 +115,11 @@ client.on('interactionCreate',async i => {
       const why=`${i.user.tag}: ${reason}`.slice(0,512);
       if(n==='warn') { const warnings=store.get(key,[]); warnings.push({reason,moderator:i.user.id,date:new Date().toISOString()}); store.set(key,warnings); }
       if(n==='timeout') { if(!target.moderatable) throw new Error('Mara cannot timeout that member. Check permissions and role order.'); await target.timeout(o.getInteger('minutes',true)*60000,why); }
+      if(n==='untimeout') {
+        if(!target.moderatable) throw new Error('Mara cannot change that member’s timeout. Check Moderate Members and role order.');
+        if(!target.isCommunicationDisabled()) return await i.editReply('That member is not currently timed out.');
+        await target.timeout(null,why);
+      }
       if(n==='kick') { if(!target.kickable) throw new Error('Mara cannot kick that member.'); await target.kick(why); }
       if(n==='ban') { if(!target.bannable) throw new Error('Mara cannot ban that member.'); await target.ban({reason:why,deleteMessageSeconds:0}); }
       await audit(i.guild,`${n.toUpperCase()} | target ${target.id} | staff ${i.user.id} | ${reason}`);
