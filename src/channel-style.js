@@ -19,14 +19,16 @@ export const nameDecorations = [
 ];
 export const categoryDividers = [
   {name:'None',value:'none'},
+  {name:'Automatic · stars for community, shields for staff',value:'auto'},
+  {name:'Shields · ━━ 🛡 Staff 🛡 ━━',value:'shields'},
   {name:'Lines · ━━ Community ━━',value:'lines'},
   {name:'Stars · ━━ ✦ Community ✦ ━━',value:'stars'},
   {name:'Brackets · ╭── Community ──╮',value:'brackets'}
 ];
-const dividerFrames={none:['',''],lines:['━━ ',' ━━'],stars:['━━ ✦ ',' ✦ ━━'],brackets:['╭── ',' ──╮']};
+const dividerFrames={shields:['━━ 🛡 ',' 🛡 ━━'],none:['',''],lines:['━━ ',' ━━'],stars:['━━ ✦ ',' ✦ ━━'],brackets:['╭── ',' ──╮']};
 function withoutDivider(name) {
-  // Match the more specific star frame before the plain line frame.
-  for(const key of ['stars','brackets','lines']) {
+  // Match the more specific symbol frames before the plain line frame.
+  for(const key of ['shields','stars','brackets','lines']) {
     const [left,right]=dividerFrames[key];
     if(name.startsWith(left)&&name.endsWith(right)) return name.slice(left.length,-right.length);
   }
@@ -59,7 +61,7 @@ const ordinaryLetters=new Map(Object.values(letterMaps).flatMap(map=>Array.from(
 
 export function styledName(name,style='plain',decoration='none',type=0,divider='none') {
   if(!nameStyles.some(s=>s.value===style)||!Object.hasOwn(prefixes,decoration)) throw Error('Choose a supported name style and decoration.');
-  if(!Object.hasOwn(dividerFrames,divider)) throw Error('Choose a supported category divider.');
+  if(divider!=='auto'&&!Object.hasOwn(dividerFrames,divider)) throw Error('Choose a supported category divider.');
   if(divider!=='none'&&type!==4) throw Error('Dividers are for categories only.');
   if(!nameChannelTypes.includes(type)) throw Error('Choose a server channel or category, not a thread.');
   if(typeof name!=='string'||/[\p{Cc}\p{Cf}]/u.test(name)) throw Error('Enter a name without control or invisible formatting characters.');
@@ -70,7 +72,10 @@ export function styledName(name,style='plain',decoration='none',type=0,divider='
     if(style==='small-caps'&&/[a-z]/i.test(c)) return smallCaps[c.toLowerCase().charCodeAt(0)-97];
     return letterMaps[style]?.get(c)||c;
   }).join('');
-  const [left,right]=dividerFrames[divider];
+  // Match whole words after decoding Mara lettering, including styled Staff names.
+  const words=baseName(base).toLowerCase().split(/[^\p{L}\p{N}]+/u);
+  const frame=divider==='auto'?(words.some(word=>['staff','admin','admins','administration','moderator','moderators','moderation'].includes(word))?'shields':'stars'):divider;
+  const [left,right]=dividerFrames[frame];
   const result=left+prefixes[decoration]+letters+right;
   if(result.length>100) throw Error('The styled name is too long. Use a shorter name (maximum 100 UTF-16 units including decoration and divider).');
   return result;

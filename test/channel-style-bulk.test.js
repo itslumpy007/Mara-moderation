@@ -118,7 +118,7 @@ test('category dividers frame names, restyle cleanly and enforce length',()=>{
  assert.equal(styledName('COMMUNITY','plain','none',4,'stars'),'━━ ✦ COMMUNITY ✦ ━━');
  assert.equal(styledName('Community','plain','none',4,'lines'),'━━ Community ━━');
  assert.equal(styledName('Community','plain','none',4,'brackets'),'╭── Community ──╮');
- for(const divider of ['lines','stars','brackets']) {
+ for(const divider of ['lines','stars','brackets','shields','auto']) {
   const name=styledName('Community','bold','star',4,divider);
   assert.equal(baseName(name),'Community');
   assert.equal(styledName(baseName(name),'bold','star',4,divider),name);
@@ -146,5 +146,32 @@ test('all scope frames only categories and rejects divider with children-only sc
  assert.equal(f.channels.get('cat').name,'━━ ✦ ✦・ᴄᴏᴍᴍᴜɴɪᴛʏ ✦ ━━');
  assert.equal(f.channels.get('general').name,'✦・ɢᴇɴᴇʀᴀʟ');
  for(const scope of ['channels','category']) await assert.rejects(run(fixture({scope,category:scope==='category'?'cat':null,divider:'stars'})),/use dividers/);
- for(const name of ['channel-style','channel-style-bulk']) assert.equal(commands.find(c=>c.name===name).options.find(o=>o.name==='divider').choices.length,4);
+ for(const name of ['channel-style','channel-style-bulk']) assert.equal(commands.find(c=>c.name===name).options.find(o=>o.name==='divider').choices.length,6);
+});
+
+
+test('automatic category dividers choose shields for staff and stars for community',()=>{
+ for(const name of ['Staff','STAFF ROOM','Admin','Moderation','Community Staff']) assert.equal(styledName(name,'plain','none',4,'auto'),'━━ 🛡 '+name+' 🛡 ━━');
+ for(const name of ['Community','Gaming','Stafford','Administratorium']) assert.equal(styledName(name,'plain','none',4,'auto'),'━━ ✦ '+name+' ✦ ━━');
+ assert.equal(styledName('Community','plain','none',4,'shields'),'━━ 🛡 Community 🛡 ━━');
+ assert.equal(baseName('━━ 🛡 Staff 🛡 ━━'),'Staff');
+ for(const {value:style} of nameStyles) {
+  const name=styledName('Staff',style,'none',4,'auto');
+  assert.ok(name.startsWith('━━ 🛡 '));
+  assert.equal(styledName(baseName(name),style,'none',4,'auto'),name);
+ }
+});
+
+test('automatic bulk themes mix stars and shields, preview first, and do not stack',async()=>{
+ const f=fixture({scope:'categories',style:'plain',decoration:'none',divider:'auto'});
+ f.channels.set('staff',{...f.channels.get('cat'),id:'staff',name:'Staff'});
+ await run(f);
+ const report=f.replies.at(-1).files[0].attachment.toString();
+ assert.match(report,/━━ ✦ Community ✦ ━━/);assert.match(report,/━━ 🛡 Staff 🛡 ━━/);
+ assert.equal(f.changed.length,0);
+ f.i.options.getBoolean=()=>true;await run(f);
+ assert.equal(f.channels.get('cat').name,'━━ ✦ Community ✦ ━━');
+ assert.equal(f.channels.get('staff').name,'━━ 🛡 Staff 🛡 ━━');
+ const count=f.changed.length;await run(f);assert.equal(f.changed.length,count);
+ assert.equal(f.channels.get('general').name,'general');
 });

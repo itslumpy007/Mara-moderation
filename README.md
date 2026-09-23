@@ -31,6 +31,8 @@ Bulk styling: use `/channel-style-bulk scope:all style:small-caps decoration:sta
 
 Category dividers: choose `divider:stars`, `divider:lines`, or `divider:brackets` in either styling command to create headings such as **━━ ✦ COMMUNITY ✦ ━━**. For every category, preview `/channel-style-bulk scope:categories style:plain divider:stars`, then repeat with `apply:True`. Lettering styles work inside dividers. Omit decoration for a clean frame. Existing Mara dividers are replaced, and `divider:none` removes them. With scope all, only categories receive frames. This formats current category names when you run the command; it does not create categories or automatically format future ones.
 
+Automatic category themes: `/channel-style-bulk scope:categories style:plain divider:auto` previews stars for Community and other categories, and shields for categories containing the whole words Staff, Admin, Admins, Administration, Moderator, Moderators, or Moderation. The names can already use Mara lettering. Repeat with `apply:True` to apply. Choose `divider:shields` on an individual category to override the automatic choice. This is cosmetic and does not grant permissions or create private staff areas.
+
 ## Railway
 
 Deploy this repository using its Dockerfile. Add a persistent volume at `/data` and set `DATA_DIR=/data`, together with the Discord settings from `.env`. Use one replica and leave Serverless off. Stop any local copy before starting Railway. Look for `Mara online as ...` in deployment logs.
