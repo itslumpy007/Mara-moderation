@@ -48,10 +48,10 @@ export function createDashboard({client,store,env,verification,audit,fetchImpl=f
       rate.count++; rates.set(ip,rate);
       if(rate.count>180) return json(res,429,{error:'Too many requests. Try again in one minute.'});
       if(url.pathname==='/health') return json(res,client.isReady()?200:503,{ready:client.isReady()});
-      const files={'/':'index.html','/verify':'verify.html','/app.js':'app.js','/verify.js':'verify.js','/style.css':'style.css'};
+      const files={'/blacklisted-logo.png':'blacklisted-logo.png','/':'index.html','/verify':'verify.html','/app.js':'app.js','/verify.js':'verify.js','/style.css':'style.css'};
       if(req.method==='GET'&&Object.hasOwn(files,url.pathname)) {
         const file=files[url.pathname];
-        res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html; charset=utf-8');
+        res.setHeader('Content-Type',file.endsWith('.png')?'image/png':file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html; charset=utf-8');
         return res.end(await readFile(new URL('../web/'+file,import.meta.url)));
       }
       if(req.method==='GET'&&url.pathname==='/login') {
