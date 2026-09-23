@@ -4,7 +4,14 @@ export const nameStyles = [
   {name:'Plain',value:'plain'},
   {name:'Small caps · ɢᴇɴᴇʀᴀʟ',value:'small-caps'},
   {name:'Bold serif · 𝐠𝐞𝐧𝐞𝐫𝐚𝐥',value:'bold'},
-  {name:'Monospace · 𝚐𝚎𝚗𝚎𝚛𝚊𝚕',value:'mono'}
+  {name:'Monospace · 𝚐𝚎𝚗𝚎𝚛𝚊𝚕',value:'mono'},
+  {name:'Italic · 𝑔𝑒𝑛𝑒𝑟𝑎𝑙',value:'italic'},
+  {name:'Bold italic · 𝒈𝒆𝒏𝒆𝒓𝒂𝒍',value:'bold-italic'},
+  {name:'Script · 𝓰𝓮𝓷𝓮𝓻𝓪𝓵',value:'script'},
+  {name:'Gothic · 𝖌𝖊𝖓𝖊𝖗𝖆𝖑',value:'gothic'},
+  {name:'Double-struck · 𝕘𝕖𝕟𝕖𝕣𝕒𝕝',value:'double-struck'},
+  {name:'Sans bold · 𝗴𝗲𝗻𝗲𝗿𝗮𝗹',value:'sans-bold'},
+  {name:'Fullwidth · ｇｅｎｅｒａｌ',value:'fullwidth'}
 ];
 export const nameDecorations = [
   {name:'None',value:'none'}, {name:'Star · ✦・',value:'star'},
@@ -13,6 +20,27 @@ export const nameDecorations = [
 export const nameChannelTypes = [0,2,4,5,13,15,16];
 const prefixes = {none:'',star:'✦・',flower:'❀・',diamond:'◇・'};
 const smallCaps = Array.from('ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘǫʀꜱᴛᴜᴠᴡxʏᴢ');
+const alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+function lettering(upper,lower,digits=48,exceptions={}) {
+  return new Map(Array.from(alphabet,c=>{
+    const cp=c.charCodeAt(0);
+    return [c,exceptions[c]||String.fromCodePoint(cp>=97?lower+cp-97:cp>=65?upper+cp-65:digits+cp-48)];
+  }));
+}
+const letterMaps={
+  bold:lettering(0x1d400,0x1d41a,0x1d7ce),
+  mono:lettering(0x1d670,0x1d68a,0x1d7f6),
+  italic:lettering(0x1d434,0x1d44e,48,{h:'ℎ'}),
+  'bold-italic':lettering(0x1d468,0x1d482),
+  script:lettering(0x1d4d0,0x1d4ea),
+  gothic:lettering(0x1d56c,0x1d586),
+  'double-struck':lettering(0x1d538,0x1d552,0x1d7d8,{C:'ℂ',H:'ℍ',N:'ℕ',P:'ℙ',Q:'ℚ',R:'ℝ',Z:'ℤ'}),
+  'sans-bold':lettering(0x1d5d4,0x1d5ee,0x1d7ec),
+  fullwidth:lettering(0xff21,0xff41,0xff10)
+};
+// Share the same mappings for encoding and decoding so bulk restyling is reversible.
+const ordinaryLetters=new Map(Object.values(letterMaps).flatMap(map=>Array.from(map,([plain,styled])=>[styled,plain])));
+
 
 export function styledName(name,style='plain',decoration='none',type=0) {
   if(!nameStyles.some(s=>s.value===style)||!Object.hasOwn(prefixes,decoration)) throw Error('Choose a supported name style and decoration.');
@@ -23,12 +51,7 @@ export function styledName(name,style='plain',decoration='none',type=0) {
   if([0,5,15,16].includes(type)) base=base.toLowerCase().replace(/\s+/gu,'-');
   const letters=Array.from(base,c=>{
     if(style==='small-caps'&&/[a-z]/i.test(c)) return smallCaps[c.toLowerCase().charCodeAt(0)-97];
-    if((style==='bold'||style==='mono')&&/[a-zA-Z0-9]/.test(c)) {
-      const start=style==='bold'?[0x1d400,0x1d41a,0x1d7ce]:[0x1d670,0x1d68a,0x1d7f6];
-      const code=c.charCodeAt(0);
-      return String.fromCodePoint(code>=97?start[1]+code-97:code>=65?start[0]+code-65:start[2]+code-48);
-    }
-    return c;
+    return letterMaps[style]?.get(c)||c;
   }).join('');
   const result=prefixes[decoration]+letters;
   if(result.length>100) throw Error('The styled name is too long. Use a shorter name (maximum 100 UTF-16 units including decoration).');
@@ -59,11 +82,7 @@ export function baseName(name) {
   return Array.from(name,c=>{
     const small=smallCaps.indexOf(c);
     if(small>=0) return String.fromCharCode(97+small);
-    const cp=c.codePointAt(0);
-    for(const [start,count,ascii] of [[0x1d400,26,65],[0x1d41a,26,97],[0x1d7ce,10,48],[0x1d670,26,65],[0x1d68a,26,97],[0x1d7f6,10,48]]) {
-      if(cp>=start&&cp<start+count) return String.fromCharCode(ascii+cp-start);
-    }
-    return c;
+    return ordinaryLetters.get(c)||c;
   }).join('');
 }
 

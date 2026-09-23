@@ -21,7 +21,7 @@ Run `/help` and `/setup-check`. Use `/config` to save channels and roles directl
 
 ## Channel and category lettering
 
-Use `/channel-style` to choose a channel or category, enter its base name, and pick Plain, Small caps, Bold serif, or Monospace. Add an optional star, flower, or diamond decoration. The default is a private preview; repeat with `apply:True` to rename the selected channel.
+Use `/channel-style` to choose a channel or category, enter its base name, and pick Plain, Small caps, Bold serif, Monospace, Italic, Bold italic, Script, Gothic, Double-struck, Sans bold, or Fullwidth. Add an optional star, flower, or diamond decoration. The default is a private preview; repeat with `apply:True` to rename the selected channel.
 
 Example: `/channel-style channel:#general name:general style:small-caps decoration:star` previews **✦・ɢᴇɴᴇʀᴀʟ**. Categories and voice channels retain spaces and case; text channel spaces become hyphens. These are Unicode letters, not installed fonts; rendering, screen readers, and name search may differ across clients. Choose Plain with an undecorated base name to return to ordinary lettering.
 

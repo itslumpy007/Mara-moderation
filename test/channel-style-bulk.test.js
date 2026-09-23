@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PermissionsBitField, PermissionFlagsBits as P } from 'discord.js';
-import { baseName, styledName, styleChannels } from '../src/channel-style.js';
+import { baseName, styledName, styleChannels, nameStyles } from '../src/channel-style.js';
 import { commands } from '../src/commands.js';
 
 function fixture({scope='all',apply=false,category=null,denied=[],fail=[],style='small-caps',decoration='star'}={}) {
@@ -14,7 +14,7 @@ function fixture({scope='all',apply=false,category=null,denied=[],fail=[],style=
 const run=f=>styleChannels(f.i,f.actor,f.audit);
 
 test('restyling replaces supported lettering without stacking decorations',()=>{
- for(const style of ['plain','small-caps','bold','mono']) {
+ for(const {value:style} of nameStyles) {
   const name=styledName('general',style,'star');
   assert.equal(styledName(baseName(name),style,'star'),name);
   assert.equal(baseName(name),'general');
@@ -74,4 +74,41 @@ test('bulk command is restricted and previews by default',()=>{
  const c=commands.find(c=>c.name==='channel-style-bulk');
  assert.equal(c.default_member_permissions,String(P.ManageChannels));
  assert.equal(c.options.find(o=>o.name==='apply').required,false);
+});
+
+
+test('all lettering styles encode assigned Unicode characters and round-trip all letters and digits',()=>{
+ for(const {value:style} of nameStyles.filter(s=>s.value!=='small-caps')) {
+  for(const text of ['ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz','0123456789']) {
+   const styled=styledName(text,style,'none',4);
+   assert.equal(baseName(styled),text,style);
+   assert.equal(styled.normalize('NFKD'),text,style);
+   assert.equal(styledName(baseName(styled),style,'none',4),styled);
+  }
+ }
+});
+
+test('new styles handle Unicode exceptions and preserve unrelated symbols',()=>{
+ assert.equal(styledName('high','italic','none',4),'ℎ𝑖𝑔ℎ');
+ assert.equal(styledName('CHNPQRZ','double-struck','none',4),'ℂℍℕℙℚℝℤ');
+ assert.equal(styledName('general','script'),'𝓰𝓮𝓷𝓮𝓻𝓪𝓵');
+ assert.equal(styledName('general','gothic'),'𝖌𝖊𝖓𝖊𝖗𝖆𝖑');
+ for(const {value:style} of nameStyles) assert.equal(baseName(styledName('🌸・日本語',style,'none',4)),'🌸・日本語');
+});
+
+test('both commands expose all styles within Discord choice limits',()=>{
+ for(const name of ['channel-style','channel-style-bulk']) {
+  const choices=commands.find(c=>c.name===name).options.find(o=>o.name==='style').choices;
+  assert.equal(choices.length,11);assert.ok(choices.length<=25);
+  assert.equal(new Set(choices.map(c=>c.value)).size,choices.length);
+ }
+});
+
+test('bulk can switch from script to Gothic and then plain',async()=>{
+ const f=fixture({apply:true,style:'script'});await run(f);
+ f.i.options.getString=key=>({scope:'all',style:'gothic',decoration:'star'}[key]);await run(f);
+ assert.equal(f.channels.get('general').name,'✦・𝖌𝖊𝖓𝖊𝖗𝖆𝖑');
+ f.i.options.getString=key=>({scope:'all',style:'plain',decoration:'none'}[key]);await run(f);
+ assert.equal(f.channels.get('general').name,'general');
+ assert.equal(f.channels.get('cat').name,'Community');
 });
