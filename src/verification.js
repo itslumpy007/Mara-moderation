@@ -8,6 +8,19 @@ export function verificationGate(member,settings,pausedUntil=0,now=Date.now()) {
 }
 export function createVerification({store,env,audit}) {
   const locks=new Set();
+  async function unverifiedRole(member) {
+    if(!env.UNVERIFIED_ROLE_ID) return null;
+    if(env.UNVERIFIED_ROLE_ID===env.VERIFIED_ROLE_ID) throw Error('Verified and Unverified must be different roles.');
+    const role=await member.guild.roles.fetch(env.UNVERIFIED_ROLE_ID).catch(()=>null);
+    const issue=verificationProblem(role,await member.guild.members.fetchMe());
+    if(issue) throw Error('Unverified role configuration: '+issue);
+    return role;
+  }
+  async function removeUnverified(member) {
+    if(!env.UNVERIFIED_ROLE_ID||!member.roles.cache.has(env.UNVERIFIED_ROLE_ID)) return;
+    const role=await unverifiedRole(member);
+    await member.roles.remove(role,'Completed verification');
+  }
   async function grant(member,{staff=false,actor='self',captchaPassed=false}={}) {
     if(locks.has(member.id)) throw Error('Verification is already being processed.');
     locks.add(member.id);
@@ -15,19 +28,24 @@ export function createVerification({store,env,audit}) {
       const cfg=config(store), guild=member.guild;
       const role=await guild.roles.fetch(env.VERIFIED_ROLE_ID||'0').catch(()=>null);
       const problem=verificationProblem(role,await guild.members.fetchMe()); if(problem) throw Error(problem);
-      if(member.roles.cache.has(role.id)) return 'You are already verified.';
+      if(member.roles.cache.has(role.id)) { await removeUnverified(member); return 'You are already verified.'; }
       if(!staff) {
         const gate=verificationGate(member,cfg,store.get('raid:pausedUntil',0)); if(gate) throw Error(gate);
         if(cfg.captcha&&!captchaPassed) throw Error('Complete the verification challenge first.');
       }
       await member.roles.add(role,staff?'Staff verification approval by '+actor:'Accepted rules and completed verification');
+      await removeUnverified(member);
       store.delete('verify-review:'+member.id);
       store.addCase({type:'verify',target:member.id,actor,reason:staff?'Staff approved verification':'Rules accepted'+(captchaPassed?' and CAPTCHA completed':'')});
       await audit(guild,'Rules accepted: '+member.user.tag+' | '+member.id);
       return 'You’re verified. Welcome to The Blacklisted.';
     } finally {locks.delete(member.id);}
   }
-  return {grant, async request(member) {
+  return {grant, async assignUnverified(member) {
+    if(member.user.bot||!env.UNVERIFIED_ROLE_ID||member.roles.cache.has(env.VERIFIED_ROLE_ID)||member.roles.cache.has(env.UNVERIFIED_ROLE_ID)) return;
+    const role=await unverifiedRole(member);
+    await member.roles.add(role,'New member awaiting verification');
+  }, async request(member) {
     const key='verify-review:'+member.id;
     if(store.get(key)?.status==='pending') return 'Your request is already waiting for staff.';
     store.set(key,{status:'pending',created:Date.now()});

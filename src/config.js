@@ -7,7 +7,7 @@ export const defaultConfig = {
   raidAction: 'off', raidJoins: 8, raidSeconds: 20, raidHoldMinutes: 10,
   ticketCategories: ['General support','Member report','Appeal'], aiContextReview: false
 };
-export const configurableIds = ['LOG_CHANNEL_ID','WELCOME_CHANNEL_ID','VERIFIED_ROLE_ID','STAFF_ROLE_ID','TICKET_CATEGORY_ID'];
+export const configurableIds = ['LOG_CHANNEL_ID','WELCOME_CHANNEL_ID','VERIFIED_ROLE_ID','UNVERIFIED_ROLE_ID','STAFF_ROLE_ID','TICKET_CATEGORY_ID'];
 export function config(store) { return {...defaultConfig,...store.get('config',{})}; }
 export function runtimeEnv(store, env) {
   return new Proxy(env,{get(target,key){ const saved=store.get('config',{}); return configurableIds.includes(key) && Object.hasOwn(saved,key) ? saved[key] : target[key]; }});
@@ -40,10 +40,12 @@ export async function saveConfig(store,patch,guild,actor,env) {
     } else {
       const role=await guild.roles.fetch(clean[key]);
       if(!role||role.id===guild.id) throw Error('Select an existing role other than @everyone.');
-      if(key==='VERIFIED_ROLE_ID') { const issue=verificationProblem(role,me); if(issue) throw Error(issue); }
+      if(key==='VERIFIED_ROLE_ID'||key==='UNVERIFIED_ROLE_ID') { const issue=verificationProblem(role,me); if(issue) throw Error(issue); }
     }
   }
   if(clean.captcha && !(env.DASHBOARD_ENABLED==='true'&&env.PUBLIC_BASE_URL&&env.DISCORD_CLIENT_SECRET&&env.TURNSTILE_SITE_KEY&&env.TURNSTILE_SECRET_KEY)) throw Error('Configure the HTTPS dashboard and Turnstile credentials before enabling CAPTCHA.');
+  const effective=runtimeEnv(store,env), verified=clean.VERIFIED_ROLE_ID??effective.VERIFIED_ROLE_ID, unverified=clean.UNVERIFIED_ROLE_ID??effective.UNVERIFIED_ROLE_ID;
+  if(verified&&verified===unverified) throw Error('Verified and Unverified must be different roles.');
   store.set('config',{...store.get('config',{}),...clean});
   return config(store);
 }

@@ -224,6 +224,7 @@ client.on('messageReactionRemove',(r,u)=>reactionRole(r,u,false).catch(()=>conso
 client.on('guildMemberAdd',async m=>{
   if(!allowed(m.guild)) return;
   await audit(m.guild,`JOIN | ${m.user.tag} | ${m.id}`);
+  await verification.assignUnverified(m).catch(async()=>{console.error('Unverified role assignment failed. Check role configuration and permissions.');await audit(m.guild,'Unverified role assignment failed for '+m.id+'. Check /config and role hierarchy.');});
   await raidGuard(m).catch(()=>console.error('Raid check failed.'));
   if(env.WELCOME_CHANNEL_ID) await textChannel(m.guild,env.WELCOME_CHANNEL_ID).then(c=>c.send({content:welcomeText(config(store).welcomeText,m),allowedMentions:{users:[m.id]}})).catch(()=>console.error('Welcome failed.'));
 });

@@ -5,7 +5,7 @@ const channel = {type:7,name:'channel',description:'Destination text channel',re
 const command = (name, description, options=[], permission) => ({name,description,options,dm_permission:false,...(permission ? {default_member_permissions:String(permission)} : {})});
 export const commands = [
   command('config','Set Mara channels and roles without editing Railway variables',[
-    {type:3,name:'setting',description:'Setting to change',required:true,choices:['LOG_CHANNEL_ID','WELCOME_CHANNEL_ID','VERIFIED_ROLE_ID','STAFF_ROLE_ID','TICKET_CATEGORY_ID'].map(value=>({name:value,value}))},
+    {type:3,name:'setting',description:'Setting to change',required:true,choices:['LOG_CHANNEL_ID','WELCOME_CHANNEL_ID','VERIFIED_ROLE_ID','UNVERIFIED_ROLE_ID','STAFF_ROLE_ID','TICKET_CATEGORY_ID'].map(value=>({name:value,value}))},
     str('id','Channel or role ID; use - to clear')
   ],P.ManageGuild),
   command('welcome','Customize and preview welcome messages',[str('text','Use {user}, {server}, {count}; omit to preview',false)],P.ManageGuild),
