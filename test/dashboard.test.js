@@ -1,0 +1,52 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { once } from 'node:events';
+import { PermissionsBitField, PermissionFlagsBits as P } from 'discord.js';
+import { createDashboard, validateChallenge } from '../src/dashboard.js';
+import { createStore } from '../src/store.js';
+test('Turnstile requires successful server validation, matching hostname and action',async()=>{
+ const env={PUBLIC_BASE_URL:'https://mara.example',TURNSTILE_SECRET_KEY:'test'};
+ for(const result of [{success:false},{success:true,hostname:'other.example',action:'mara_verify'},{success:true,hostname:'mara.example',action:'wrong'}]) {
+  await assert.rejects(validateChallenge('token',env,async()=>({ok:true,json:async()=>result})),/failed/);
+ }
+ await validateChallenge('token',env,async()=>({ok:true,json:async()=>({success:true,hostname:'mara.example',action:'mara_verify'})}));
+ await assert.rejects(validateChallenge('',env),/Complete/);
+});
+test('dashboard login state, CSRF, authorization, logout, and revocation are enforced',async t=>{
+ const store=createStore(':memory:');let manager=true,grants=0;
+ const member={id:'123456789012345678',get permissions(){return new PermissionsBitField(manager?[P.ManageGuild]:[]);}};
+ const guild={name:'Test server',roles:{fetch:async()=>{}},members:{fetch:async()=>member,fetchMe:async()=>({})}};
+ const client={isReady:()=>true,guilds:{fetch:async()=>guild}};
+ const env={PUBLIC_BASE_URL:'http://localhost:3000',CLIENT_ID:'client',DISCORD_CLIENT_SECRET:'never-expose',GUILD_ID:'guild',OPENAI_API_KEY:'also-secret'};
+ let time=10000;
+ const server=createDashboard({store,client,env,now:()=>time,verification:{grant:async()=>{grants++;return 'verified';},request:async()=> 'queued'},audit:async()=>{},fetchImpl:async url=>({ok:true,json:async()=>url.endsWith('/token')?{access_token:'oauth-private'}:{id:member.id,username:'Test user'}})});
+ server.listen(0,'127.0.0.1');await once(server,'listening');
+ t.after(async()=>{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));store.close();});
+ const base='http://127.0.0.1:'+server.address().port;
+ const request=(path,options={})=>fetch(base+path,{redirect:'manual',...options});
+ assert.equal((await request('/api/state')).status,401);
+ assert.equal((await request('/oauth/callback?state=forged&code=code')).status,403);
+ const login=await request('/login?next=/verify');
+ const state=new URL(login.headers.get('location')).searchParams.get('state');
+ const flowCookie=login.headers.getSetCookie()[0].split(';')[0];
+ assert.equal((await request('/oauth/callback?state='+state+'&code=code')).status,403);
+ const callback=await request('/oauth/callback?state='+state+'&code=code',{headers:{cookie:flowCookie}});
+ assert.equal(callback.status,302);assert.equal(callback.headers.get('location'),'/verify');
+ const cookie=callback.headers.getSetCookie().find(x=>x.startsWith('mara_session=')).split(';')[0];
+ assert.equal((await request('/oauth/callback?state='+state+'&code=code',{headers:{cookie:flowCookie}})).status,403);
+ const me=await (await request('/api/me',{headers:{cookie}})).json();assert.equal(me.admin,true);
+ const post=(path,body,extra={})=>request(path,{method:'POST',headers:{cookie,origin:env.PUBLIC_BASE_URL,'Content-Type':'application/json','X-CSRF-Token':me.csrf,...extra},body:JSON.stringify(body)});
+ assert.equal((await post('/api/config',{minAccountDays:3},{origin:'https://evil.example'})).status,403);
+ assert.equal((await post('/api/config',{minAccountDays:3},{'X-CSRF-Token':'wrong'})).status,403);
+ assert.equal((await post('/api/config',{DISCORD_TOKEN:'secret'})).status,400);
+ assert.equal((await post('/api/config',{minAccountDays:3})).status,200);assert.equal(store.get('config').minAccountDays,3);
+ const stateResponse=await (await request('/api/state',{headers:{cookie}})).text();assert.equal(stateResponse.includes('never-expose'),false);assert.equal(stateResponse.includes('also-secret'),false);
+ assert.equal((await post('/api/verify',{accepted:false})).status,400);assert.equal(grants,0);
+ assert.equal((await post('/api/verify',{accepted:true})).status,200);assert.equal(grants,1);
+ manager=false;
+ assert.equal((await request('/api/state',{headers:{cookie}})).status,403);
+ assert.equal((await post('/api/config',{minAccountDays:0})).status,403);
+ assert.equal((await post('/api/logout',{})).status,200);
+ assert.equal((await request('/api/me',{headers:{cookie}})).status,401);
+ time+=3600001;
+});
