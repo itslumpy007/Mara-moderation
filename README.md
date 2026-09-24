@@ -41,6 +41,12 @@ The formatted rules are in [SERVER-RULES.md](SERVER-RULES.md). Preview a purple,
 
 Preview public rules with `/rules`, or edit them with `/rules text:...`. Public rules have their own setting; `/verification rules` continues to control the separate verification flow. Posted rules cards are snapshots; post a new card after changing the rules.
 
+## Category permission preset
+
+Administrators can use `/category-permissions` for a private preview, then `action:apply` to set and sync Info, Community, Voice and Staff categories and their child channels. Info is readable by everyone but writable only by Staff/Mara; Community and Voice require Verified; Staff is private to Staff/Mara. Uses the configured Verified and Staff roles. Administrators (including other administrator bots) always bypass these restrictions.
+
+Applying replaces all listed channel-specific role/member overrides. Unknown categories and ticket areas are skipped. No role memberships or server-level role permissions change. A complete overwrite snapshot is saved before the first change; `action:restore` restores that snapshot. An unchanged apply preserves the previous backup. Each successful changed apply replaces the previous backup. The command stops on failure and reports partial changes, which can be undone with restore. Do not manually change permissions during a run; restore refuses to overwrite unexpected edits.
+
 ## Railway
 
 Deploy this repository using its Dockerfile. Add a persistent volume at `/data` and set `DATA_DIR=/data`, together with the Discord settings from `.env`. Use one replica and leave Serverless off. Stop any local copy before starting Railway. Look for `Mara online as ...` in deployment logs.

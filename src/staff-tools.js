@@ -1,3 +1,4 @@
+import { categoryPermissions } from './category-permissions.js';
 import { publicRulesPanel } from './rules.js';
 import { styleChannel, styleChannels } from './channel-style.js';
 import { PermissionFlagsBits as P, escapeMarkdown } from 'discord.js';
@@ -15,7 +16,8 @@ export function createStaffTools({store,env,audit,backupNow,verification,tickets
     if(admin.includes(n)&&!actor.permissions.has(P.ManageGuild)) throw Error('Manage Server is required.');
     const save=patch=>saveConfig(store,patch,i.guild,actor,env);
     let result;
-    if(n==='rules') {
+    if(n==='category-permissions') { await categoryPermissions(i,actor,{env,store,audit}); return true; }
+    else if(n==='rules') {
       const text=o.getString('text');
       if(text!==null) {
         await save({publicRules:text});
