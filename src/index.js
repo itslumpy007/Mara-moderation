@@ -209,7 +209,7 @@ client.on('interactionCreate',async i => {
     const errorId=i.id;
     store.set('health:interaction',{time:Date.now(),id:errorId,code:String(error.code||error.name)});
     console.error('Interaction failed:',errorId,error.code || error.name);
-    const message=error.code ? 'Discord could not complete this action. Check Mara’s permissions, role order, and configured IDs. Reference: '+errorId : error.message;
+    const message=Number(error.code)===50035 ? 'Discord rejected the message formatting. This is a Mara formatting issue, not a request to change your permissions. Reference: '+errorId : error.code ? 'Discord could not complete this action. Check Mara’s permissions, role order, and configured IDs. Reference: '+errorId : error.message;
     if(i.deferred || i.replied) await i.editReply({content:message}).catch(()=>{});
     else await i.reply({content:message,flags:MessageFlags.Ephemeral}).catch(()=>{});
   }

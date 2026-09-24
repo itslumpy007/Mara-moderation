@@ -45,7 +45,7 @@ export function publicRulesPanel(settings) {
       ...(standard?{fields:communityRules.map(([title,value],index)=>({name:String(index+1).padStart(2,'0')+'  ━  '+title,value,inline:false}))}:{}),
       footer:{text:'Need help? Open a private ticket • Mara is here to guide you.'}
     }],
-    components:[{type:1,components:[{type:2,style:3,custom_id:'verify',label:'Read & accept the rules',emoji:{name:'✦'}}]}],
+    components:[{type:1,components:[{type:2,style:3,custom_id:'verify',label:'Read & accept the rules'}]}],
     allowedMentions:{parse:[]}
   };
 }

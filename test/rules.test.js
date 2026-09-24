@@ -12,6 +12,9 @@ test('default rules fit configuration limits and produce seven readable sections
  new EmbedBuilder(panel.embeds[0]).toJSON();
  assert.equal(panel.embeds[0].fields.length,7);
  assert.equal(panel.components[0].components[0].custom_id,'verify');
+ // Decorative text symbols such as ✦ are not valid Discord button emoji.
+ assert.equal(panel.components[0].components[0].emoji,undefined);
+ assert.equal(panel.components[0].components[0].label,'Read & accept the rules');
  assert.deepEqual(panel.allowedMentions,{parse:[]});
 });
 
