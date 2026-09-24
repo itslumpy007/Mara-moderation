@@ -1,3 +1,4 @@
+import { sendWelcome } from './welcome.js';
 import { panelTargetId } from './panel-target.js';
 import { postRulesPanel } from './rules.js';
 import { mkdirSync } from 'node:fs';
@@ -9,7 +10,7 @@ import { createAutomod, settings, validateAutomod } from './automod.js';
 import { createAI } from './ai.js';
 import { logCard } from './log-style.js';
 import { setupCheck } from './setup-check.js';
-import { config, runtimeEnv, welcomeText } from './config.js';
+import { config, runtimeEnv } from './config.js';
 import { createDelivery, createBackups, privateChannel } from './reliability.js';
 import { createVerification, verificationGate, rulesVersion, rulesCard } from './verification.js';
 import { createTickets } from './tickets.js';
@@ -230,7 +231,7 @@ client.on('guildMemberAdd',async m=>{
   await audit(m.guild,`JOIN | ${m.user.tag} | ${m.id}`);
   await verification.assignUnverified(m).catch(async()=>{console.error('Unverified role assignment failed. Check role configuration and permissions.');await audit(m.guild,'Unverified role assignment failed for '+m.id+'. Check /config and role hierarchy.');});
   await raidGuard(m).catch(()=>console.error('Raid check failed.'));
-  if(env.WELCOME_CHANNEL_ID) await textChannel(m.guild,env.WELCOME_CHANNEL_ID).then(c=>c.send({content:welcomeText(config(store).welcomeText,m),allowedMentions:{users:[m.id]}})).catch(()=>console.error('Welcome failed.'));
+  if(env.WELCOME_CHANNEL_ID) await textChannel(m.guild,env.WELCOME_CHANNEL_ID).then(c=>sendWelcome(c,m,config(store).welcomeText)).catch(()=>console.error('Welcome failed.'));
 });
 client.on('guildMemberRemove',m=>{if(allowed(m.guild)) void audit(m.guild,`LEAVE | ${m.user.tag} | ${m.id}`);});
 client.on('messageDelete',m=>{if(allowed(m.guild)&&!m.author?.bot&&m.channelId!==env.LOG_CHANNEL_ID) void audit(m.guild,`DELETE | channel ${m.channelId} | message ${m.id} | author ${m.author?.id||'uncached'}\n${m.content||'[content unavailable]'}`);});

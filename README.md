@@ -47,6 +47,12 @@ Administrators can use `/category-permissions` for a private preview, then `acti
 
 Applying replaces all listed channel-specific role/member overrides. Unknown categories and ticket areas are skipped. No role memberships or server-level role permissions change. A complete overwrite snapshot is saved before the first change; `action:restore` restores that snapshot. An unchanged apply preserves the previous backup. Each successful changed apply replaces the previous backup. The command stops on failure and reports partial changes, which can be undone with restore. Do not manually change permissions during a run; restore refuses to overwrite unexpected edits.
 
+## Welcome cards
+
+New members receive a purple welcome card with their avatar, the server icon, member count, and three short getting-started steps. Link buttons point to Rules and Verification when Mara finds those text channels (including styled names) and the joining member can view them. These are navigation links; they do not verify the member. If Embed Links is unavailable, Mara sends a plain-text greeting instead.
+
+Use `/welcome` to privately preview the card, or `/welcome text:...` to customize the greeting with `{user}`, `{server}`, and `{count}`. Existing custom greetings are preserved.
+
 ## Railway
 
 Deploy this repository using its Dockerfile. Add a persistent volume at `/data` and set `DATA_DIR=/data`, together with the Discord settings from `.env`. Use one replica and leave Serverless off. Stop any local copy before starting Railway. Look for `Mara online as ...` in deployment logs.

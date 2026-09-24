@@ -2,7 +2,7 @@ import { defaultRules } from './rules.js';
 import { ChannelType, PermissionFlagsBits as P } from 'discord.js';
 import { verificationProblem } from './setup-check.js';
 export const defaultConfig = {
-  welcomeText: 'Welcome {user} to **{server}**! I’m Mara. Read the rules and use the verification panel to get started.',
+  welcomeText: 'Hey {user}, welcome to **{server}**! You’ve got a place here. Settle in, find your people, and bring your own spark to the community.',
   verificationRules: defaultRules,
   publicRules: defaultRules,
   minAccountDays: 0, captcha: false, warningThreshold: 0, warningTimeoutMinutes: 10,

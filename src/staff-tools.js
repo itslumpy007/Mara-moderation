@@ -1,8 +1,9 @@
+import { makeWelcome } from './welcome.js';
 import { categoryPermissions } from './category-permissions.js';
 import { publicRulesPanel } from './rules.js';
 import { styleChannel, styleChannels } from './channel-style.js';
 import { PermissionFlagsBits as P, escapeMarkdown } from 'discord.js';
-import { config, saveConfig, welcomeText } from './config.js';
+import { config, saveConfig } from './config.js';
 import { settings, validateAutomod } from './automod.js';
 import { canTarget } from './security.js';
 const clean=value=>escapeMarkdown(String(value));
@@ -30,7 +31,9 @@ export function createStaffTools({store,env,audit,backupNow,verification,tickets
     else if(n==='config') { await save({[s('setting')]:s('id')==='-'?'':s('id')}); result='Saved. This setting takes effect immediately and overrides the Railway value. Run /setup-check to verify it.'; }
     else if(n==='welcome') {
       if(o.getString('text')) await save({welcomeText:s('text')});
-      result='Welcome preview:\n'+welcomeText(config(store).welcomeText,actor);
+      const preview=await makeWelcome(actor,config(store).welcomeText);
+      preview.allowedMentions={parse:[]};
+      await i.editReply(preview); return true;
     }
     else if(n==='protection') {
       const patch={};
