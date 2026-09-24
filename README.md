@@ -33,6 +33,12 @@ Category dividers: choose `divider:stars`, `divider:lines`, or `divider:brackets
 
 Automatic category themes: `/channel-style-bulk scope:categories style:plain divider:auto` previews stars for Community and other categories, and shields for categories containing the whole words Staff, Admin, Admins, Administration, Moderator, Moderators, or Moderation. The names can already use Mara lettering. Repeat with `apply:True` to apply. Choose `divider:shields` on an individual category to override the automatic choice. This is cosmetic and does not grant permissions or create private staff areas.
 
+## Rules panel
+
+The formatted rules are in [SERVER-RULES.md](SERVER-RULES.md). Preview a purple, numbered rules card with `/panel channel:#rules kind:rules preview:True`. Post it with `preview:False`. Its button opens the current private rules-acceptance flow, including CAPTCHA when enabled. Mara needs Embed Links as well as View Channel and Send Messages.
+
+Default rules use the new wording and layout. Existing rules saved with `/verification rules` remain unchanged and appear verbatim in the card. Edit them with that command. Posted rules cards are snapshots; post a new card after changing the rules.
+
 ## Railway
 
 Deploy this repository using its Dockerfile. Add a persistent volume at `/data` and set `DATA_DIR=/data`, together with the Discord settings from `.env`. Use one replica and leave Serverless off. Stop any local copy before starting Railway. Look for `Mara online as ...` in deployment logs.

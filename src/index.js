@@ -1,3 +1,4 @@
+import { postRulesPanel } from './rules.js';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client, GatewayIntentBits as I, Partials, PermissionFlagsBits as P, ChannelType, MessageFlags } from 'discord.js';
@@ -142,7 +143,9 @@ client.on('interactionCreate',async i => {
       if(n==='announce') await c.send({content:s('text')});
       if(n==='panel') {
         const kind=s('kind');
-        if (kind === 'verify') {
+        if(kind==='rules') {
+          if(!await postRulesPanel(i,c,actor,me,config(store))) return;
+        } else if (kind === 'verify') {
           const panel={
             embeds: [{
               color: 0x9B7BDA,

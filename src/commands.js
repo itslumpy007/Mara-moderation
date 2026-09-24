@@ -83,7 +83,7 @@ export const commands = [
   command('ban','Ban a member without deleting message history',[user,str('reason','Reason')],P.BanMembers),
   command('purge','Delete up to 100 recent messages',[{type:4,name:'count',description:'Number of messages',required:true,min_value:1,max_value:100}],P.ManageMessages),
   command('announce','Post an announcement',[channel,str('text','Announcement')],P.ManageGuild),
-  command('panel','Post verification or ticket buttons',[channel,{type:3,name:'kind',description:'Panel type',required:true,choices:[{name:'Verification',value:'verify'},{name:'Tickets',value:'ticket'}]},{type:5,name:'preview',description:'Show a private preview without posting',required:false}],P.ManageGuild),
+  command('panel','Post a rules, verification, or ticket panel',[channel,{type:3,name:'kind',description:'Panel type',required:true,choices:[{name:'Rules',value:'rules'},{name:'Verification',value:'verify'},{name:'Tickets',value:'ticket'}]},{type:5,name:'preview',description:'Show a private preview without posting',required:false}],P.ManageGuild),
   command('rolepanel','Create a one-role reaction panel',[channel,{type:8,name:'role',description:'Safe self-assignable role',required:true},str('text','Panel text')],P.ManageGuild),
   command('custom-set','Create or replace a saved response',[str('name','Response name'),str('text','Response text')],P.ManageGuild),
   command('custom-delete','Delete a saved response',[str('name','Response name')],P.ManageGuild),

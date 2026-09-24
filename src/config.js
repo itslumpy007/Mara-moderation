@@ -1,8 +1,9 @@
+import { defaultRules } from './rules.js';
 import { ChannelType, PermissionFlagsBits as P } from 'discord.js';
 import { verificationProblem } from './setup-check.js';
 export const defaultConfig = {
   welcomeText: 'Welcome {user} to **{server}**! I’m Mara. Read the rules and use the verification panel to get started.',
-  verificationRules: "1. Treat everyone with respect. No harassment, bullying, threats, or hate speech.\n2. No spam, disruptive flooding, scams, malicious links, or unsolicited advertising.\n3. Protect privacy. Do not share anyone’s personal information without permission.\n4. Keep content appropriate. No sexual content, graphic violence, or illegal content.\n5. Use the correct channels and follow their topics.\n6. Follow Discord’s Terms of Service and Community Guidelines.\n7. Follow staff directions. Raise concerns respectfully through a private ticket.",
+  verificationRules: defaultRules,
   minAccountDays: 0, captcha: false, warningThreshold: 0, warningTimeoutMinutes: 10,
   raidAction: 'off', raidJoins: 8, raidSeconds: 20, raidHoldMinutes: 10,
   ticketCategories: ['General support','Member report','Appeal'], aiContextReview: false
