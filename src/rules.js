@@ -33,8 +33,8 @@ export const communityRules=[
 export const defaultRules=communityRules.map(([title,text],index)=>String(index+1).padStart(2,'0')+' • '+title+'\n'+text).join('\n\n');
 
 export function publicRulesPanel(settings) {
-  const text=settings.verificationRules;
-  if(typeof text!=='string'||!text.trim()) throw Error('Set server rules with /verification rules first.');
+  const text=settings.publicRules;
+  if(typeof text!=='string'||!text.trim()) throw Error('Set server rules with /rules text first.');
   const standard=text===defaultRules;
   return {
     embeds:[{
@@ -45,7 +45,7 @@ export function publicRulesPanel(settings) {
       ...(standard?{fields:communityRules.map(([title,value],index)=>({name:String(index+1).padStart(2,'0')+'  ━  '+title,value,inline:false}))}:{}),
       footer:{text:'Need help? Open a private ticket • Mara is here to guide you.'}
     }],
-    components:[{type:1,components:[{type:2,style:3,custom_id:'verify',label:'Read & accept the rules'}]}],
+    components:[],
     allowedMentions:{parse:[]}
   };
 }
@@ -54,7 +54,6 @@ export async function postRulesPanel(i,channel,actor,me,settings) {
   if(!actor.permissions.has(P.ManageGuild)||!channel.permissionsFor(actor)?.has([P.ViewChannel,P.SendMessages])) throw Error('You need Manage Server and permission to post in this channel.');
   const panel=publicRulesPanel(settings);
   if(i.options.getBoolean('preview')) {
-    panel.components[0].components[0].disabled=true;
     await i.editReply(panel);
     return false;
   }

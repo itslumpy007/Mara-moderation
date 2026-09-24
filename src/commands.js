@@ -5,6 +5,7 @@ const user = {type:6,name:'user',description:'Member',required:true};
 const channel = {type:7,name:'channel',description:'Destination text channel',required:true,channel_types:[0]};
 const command = (name, description, options=[], permission) => ({name,description,options,dm_permission:false,...(permission ? {default_member_permissions:String(permission)} : {})});
 export const commands = [
+  command('rules','Preview or edit the standalone public rules',[str('text','New public rules; omit to preview (does not change verification)',false)],P.ManageGuild),
   command('channel-style-bulk','Preview or apply a matching style across multiple channels and categories',[
     {type:3,name:'scope',description:'Which names to change',required:true,choices:[{name:'All channels and categories',value:'all'},{name:'All channels (no categories)',value:'channels'},{name:'All categories only',value:'categories'},{name:'Within one category (children only)',value:'category'}]},
     {type:3,name:'style',description:'Lettering style',required:true,choices:nameStyles},

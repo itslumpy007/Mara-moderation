@@ -32,4 +32,4 @@ Follow staff directions. Report problems or appeal a decision through a private 
 
 ---
 
-Need help? Open a private ticket. Read and accept the rules through Mara’s verification panel to get started.
+Need help? Open a private ticket. Mara is here to guide you.

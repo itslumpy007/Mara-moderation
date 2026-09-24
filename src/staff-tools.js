@@ -1,3 +1,4 @@
+import { publicRulesPanel } from './rules.js';
 import { styleChannel, styleChannels } from './channel-style.js';
 import { PermissionFlagsBits as P, escapeMarkdown } from 'discord.js';
 import { config, saveConfig, welcomeText } from './config.js';
@@ -8,13 +9,21 @@ export function caseText(c) {
   return '#'+c.id+' • '+c.type+(c.revoked?' (revoked)':'')+'\nMember: '+c.target+' • Staff: '+c.actor+'\n'+c.created+'\n'+clean(c.reason)+(c.revoked?'\nRevoked by '+c.revoked_by+': '+clean(c.revoke_reason):'');
 }
 export function createStaffTools({store,env,audit,backupNow,verification,tickets}) {
-  const admin=['config','welcome','protection','verification','verification-review','raid','escalation','backup','ticket-categories','ai-context'];
+  const admin=['rules','config','welcome','protection','verification','verification-review','raid','escalation','backup','ticket-categories','ai-context'];
   return async (i,actor)=>{
     const n=i.commandName,o=i.options,s=name=>o.getString(name,true);
     if(admin.includes(n)&&!actor.permissions.has(P.ManageGuild)) throw Error('Manage Server is required.');
     const save=patch=>saveConfig(store,patch,i.guild,actor,env);
     let result;
-    if(n==='channel-style-bulk') { await styleChannels(i,actor,audit); return true; }
+    if(n==='rules') {
+      const text=o.getString('text');
+      if(text!==null) {
+        await save({publicRules:text});
+        await audit(i.guild,'Public rules updated by '+actor.id);
+      }
+      await i.editReply(publicRulesPanel(config(store))); return true;
+    }
+    else if(n==='channel-style-bulk') { await styleChannels(i,actor,audit); return true; }
     else if(n==='channel-style') result=await styleChannel(i,actor,audit);
     else if(n==='config') { await save({[s('setting')]:s('id')==='-'?'':s('id')}); result='Saved. This setting takes effect immediately and overrides the Railway value. Run /setup-check to verify it.'; }
     else if(n==='welcome') {

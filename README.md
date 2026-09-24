@@ -37,9 +37,9 @@ Automatic category themes: `/channel-style-bulk scope:categories style:plain div
 
 If a decorated name is missing from Discord’s channel picker, open the destination channel and run `/panel kind:rules` there, or use `/panel kind:rules channel-id:CHANNEL_ID`. The ID is resolved inside this server and the usual channel type and posting permissions still apply. Choose either `channel` or `channel-id`, not both.
 
-The formatted rules are in [SERVER-RULES.md](SERVER-RULES.md). Preview a purple, numbered rules card with `/panel channel:#rules kind:rules preview:True`. Post it with `preview:False`. Its button opens the current private rules-acceptance flow, including CAPTCHA when enabled. Mara needs Embed Links as well as View Channel and Send Messages.
+The formatted rules are in [SERVER-RULES.md](SERVER-RULES.md). Preview a purple, numbered rules card with `/panel channel:#rules kind:rules preview:True`. Post it with `preview:False`. This is a standalone information card with no verification or acceptance button. Mara needs Embed Links as well as View Channel and Send Messages.
 
-Default rules use the new wording and layout. Existing rules saved with `/verification rules` remain unchanged and appear verbatim in the card. Edit them with that command. Posted rules cards are snapshots; post a new card after changing the rules.
+Preview public rules with `/rules`, or edit them with `/rules text:...`. Public rules have their own setting; `/verification rules` continues to control the separate verification flow. Posted rules cards are snapshots; post a new card after changing the rules.
 
 ## Railway
 
