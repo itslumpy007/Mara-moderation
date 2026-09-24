@@ -1,3 +1,4 @@
+import { panelTargetId } from './panel-target.js';
 import { postRulesPanel } from './rules.js';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -138,7 +139,7 @@ client.on('interactionCreate',async i => {
     }
     if(['announce','panel','rolepanel','custom-set','custom-delete'].includes(n)) requirePermission(actor,P.ManageGuild);
     if(n==='announce'||n==='panel'||n==='rolepanel') {
-      const c=await textChannel(i.guild,o.getChannel('channel',true).id);
+      const c=await textChannel(i.guild,n==='panel'?panelTargetId(i):o.getChannel('channel',true).id);
       if(!c.permissionsFor(actor).has([P.ViewChannel,P.SendMessages])) throw new Error('You cannot post in that channel.');
       if(n==='announce') await c.send({content:s('text')});
       if(n==='panel') {
