@@ -42,6 +42,11 @@ export function createStore(path) {
       private INTEGER NOT NULL DEFAULT 0, attempts INTEGER NOT NULL DEFAULT 0,
       next_attempt INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS tiktok_live_jobs (
+      outbox_id INTEGER PRIMARY KEY REFERENCES outbox(id) ON DELETE CASCADE,
+      creator TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS tiktok_live_jobs_creator ON tiktok_live_jobs(creator,outbox_id);
   `);
   const addCase = ({type,target,actor,reason,created=new Date().toISOString()}) => Number(db.prepare('INSERT INTO cases(type,target,actor,reason,created) VALUES (?,?,?,?,?)').run(type,target,actor,reason,created).lastInsertRowid);
   function recordJoin(guild, member, joinedAt, welcomePending) {
@@ -161,11 +166,30 @@ export function createStore(path) {
         const insert = db.prepare('INSERT OR IGNORE INTO tiktok_live_alerts VALUES (?,?)').run(creator,roomId);
         if (!insert.changes) return false;
         if (store.queueSize() >= 10000) throw Error('Delivery queue is full.');
-        store.enqueue(channel,payload);
+        const id = store.enqueue(channel,payload);
+        db.prepare('INSERT INTO tiktok_live_jobs(outbox_id,creator) VALUES (?,?)').run(id,creator);
         return true;
       });
     },
-    pending(now=Date.now()) { return db.prepare('SELECT * FROM outbox WHERE next_attempt <= ? ORDER BY id LIMIT 10').all(now); },
+    pending(now=Date.now()) {
+      return db.prepare(`
+        SELECT outbox.*, live.creator AS tiktok_creator
+        FROM outbox LEFT JOIN tiktok_live_jobs live ON live.outbox_id=outbox.id
+        WHERE outbox.next_attempt<=? AND (live.creator IS NULL OR NOT EXISTS (
+          SELECT 1 FROM tiktok_live_jobs earlier
+          WHERE earlier.creator=live.creator AND earlier.outbox_id<live.outbox_id
+        ))
+        ORDER BY outbox.id LIMIT 10
+      `).all(now);
+    },
+    tiktokLiveMessage(creator) { return store.get('tiktok-live:posted:'+creator); },
+    forgetTikTokLiveMessage(creator) { store.delete('tiktok-live:posted:'+creator); },
+    completeTikTokLiveDelivery(id,creator,channel,message) {
+      transaction(() => {
+        store.set('tiktok-live:posted:'+creator,{channel,message});
+        store.delivered(id);
+      });
+    },
     delivered(id) { db.prepare('DELETE FROM outbox WHERE id=?').run(id); },
     failed(id, attempts, now=Date.now()) { db.prepare('UPDATE outbox SET attempts=?, next_attempt=? WHERE id=?').run(attempts,now+Math.min(3600000,15000*2**Math.min(attempts,8)),id); },
     queueSize() { return db.prepare('SELECT count(*) AS n FROM outbox').get().n; },

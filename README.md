@@ -59,7 +59,7 @@ Failed welcomes stay queued across restarts and retry with increasing delays whi
 
 ## TikTok LIVE alerts
 
-Mara can post one message per TikTok livestream in a Discord text channel you choose. Euler Stream’s [Community plan](https://www.eulerstream.com/pricing) lists five creator alerts. Manage the creator list, destination channel, and pause toggle in Mara’s **TikTok LIVE** dashboard section.
+Mara keeps each creator’s latest TikTok LIVE alert in the Discord text channel you choose, including after their stream ends. When that creator goes live again, Mara deletes its previous alert and posts the new one. Other creators keep their own alerts. Euler Stream’s [Community plan](https://www.eulerstream.com/pricing) lists five creator alerts. Manage the creator list, destination channel, and pause toggle in Mara’s **TikTok LIVE** dashboard section.
 
 1. Keep Mara’s dashboard enabled and reachable over HTTPS. Choose the Discord channel and give Mara View Channel and Send Messages there.
 2. In Railway, set `EULER_WEBHOOK_SECRET` to the account webhook secret from Euler Stream. The secret stays in Railway.

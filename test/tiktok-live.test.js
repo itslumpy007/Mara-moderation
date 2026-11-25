@@ -5,6 +5,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { ChannelType, RESTJSONErrorCodes } from 'discord.js';
+import { createDelivery } from '../src/reliability.js';
 import { createDashboard } from '../src/dashboard.js';
 import { createStore } from '../src/store.js';
 import { tiktokLivePath } from '../src/tiktok-live.js';
@@ -93,4 +95,102 @@ test('feature is off by default and requires a channel, an allowlist and signatu
     const inactive = await listen(t,store,{...env,...overrides});
     assert.equal((await deliver(inactive,'{}')).status,404);
   }
+});
+
+function deliveryFixture() {
+  const trace = [], messages = new Map(), rooms = new Map();
+  let nextId = 1;
+  const addChannel = id => {
+    const channel = {
+      id,type:ChannelType.GuildText,
+      canSend:true,deleteError:null,sendError:null,
+      permissionsFor:()=>({has:()=>channel.canSend}),
+      async send(payload) {
+        if(channel.sendError) throw channel.sendError;
+        const message={id:String(nextId++),channel:id,content:payload.content};
+        messages.set(message.id,message);
+        trace.push(['post',id,message.id,payload.content]);
+        return message;
+      },
+      messages:{async delete(messageId) {
+        trace.push(['delete',id,messageId]);
+        if(channel.deleteError) throw channel.deleteError;
+        if(messages.get(messageId)?.channel!==id) {
+          throw Object.assign(Error('Unknown message'),{code:RESTJSONErrorCodes.UnknownMessage});
+        }
+        messages.delete(messageId);
+      }}
+    };
+    rooms.set(id,channel);
+    return channel;
+  };
+  const firstChannel=addChannel('alerts'), secondChannel=addChannel('other-alerts');
+  const guild={channels:{fetch:async id=>rooms.get(id)},roles:{fetch:async()=>{}},members:{fetchMe:async()=>({})}};
+  const client={isReady:()=>true,user:{id:'mara'},guilds:{fetch:async()=>guild}};
+  return {trace,messages,firstChannel,secondChannel,client};
+}
+
+test('only the same creator’s latest alert is replaced, even across a restart and channel change',async t=>{
+  const dir=mkdtempSync(join(tmpdir(),'mara-live-posts-'));
+  const path=join(dir,'test.sqlite');
+  let store=createStore(path);
+  t.after(()=>{store.close();rmSync(dir,{recursive:true});});
+  const {client,trace,messages}=deliveryFixture();
+  const queue=(creator,room,channel)=>store.enqueueTikTokLive(creator,room,channel,{content:creator+' '+room});
+  const worker=()=>createDelivery({store,client,env:{GUILD_ID:'guild'}});
+  queue('first_creator','100','alerts');
+  queue('second.creator','200','alerts');
+  await worker().flush();
+  assert.equal(messages.size,2);
+  const first=store.tiktokLiveMessage('first_creator'), other=store.tiktokLiveMessage('second.creator');
+  await worker().flush();
+  assert.equal(trace.length,2);
+  store.close();
+  store=createStore(path);
+  assert.equal(queue('first_creator','100','alerts'),false);
+  assert.equal(queue('first_creator','101','other-alerts'),true);
+  await worker().flush();
+  assert.deepEqual(trace.slice(2).map(entry=>entry.slice(0,2)),[['delete','alerts'],['post','other-alerts']]);
+  assert.equal(trace[2][2],first.message);
+  assert.equal(messages.has(first.message),false);
+  assert.equal(messages.get(other.message).content,'second.creator 200');
+  assert.equal(messages.get(store.tiktokLiveMessage('first_creator').message).content,'first_creator 101');
+  assert.equal(messages.size,2);
+});
+
+test('blocked deletion holds replacements for that creator and a manually removed alert can be replaced',async t=>{
+  const store=createStore(':memory:');
+  t.after(()=>store.close());
+  const {client,firstChannel,trace,messages}=deliveryFixture();
+  let now=Date.now()+1000;
+  const delivery=createDelivery({store,client,env:{GUILD_ID:'guild'},now:()=>now});
+  const queue=(creator,room,channel='alerts')=>store.enqueueTikTokLive(creator,room,channel,{content:creator+' '+room});
+  queue('first_creator','100');
+  await delivery.flush();
+  const previous=store.tiktokLiveMessage('first_creator');
+  queue('first_creator','101');
+  queue('first_creator','102');
+  queue('second.creator','200','other-alerts');
+  firstChannel.deleteError=Object.assign(Error('Missing access'),{code:RESTJSONErrorCodes.MissingAccess});
+  await delivery.flush();
+  await delivery.flush();
+  assert.equal(messages.has(previous.message),true);
+  assert.equal(trace.filter(entry=>entry[0]==='post').length,2);
+  assert.equal(store.queueSize(),2);
+
+  messages.delete(previous.message);
+  firstChannel.deleteError=null;
+  firstChannel.sendError=Error('Discord unavailable');
+  now+=30000;
+  await delivery.flush();
+  assert.equal(store.tiktokLiveMessage('first_creator'),null);
+  assert.equal(store.queueSize(),2);
+  firstChannel.sendError=null;
+  now+=60000;
+  await delivery.flush();
+  assert.equal(messages.get(store.tiktokLiveMessage('first_creator').message).content,'first_creator 101');
+  await delivery.flush();
+  assert.equal(messages.get(store.tiktokLiveMessage('first_creator').message).content,'first_creator 102');
+  assert.equal(messages.size,2);
+  assert.equal(store.queueSize(),0);
 });

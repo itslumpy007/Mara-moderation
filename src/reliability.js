@@ -1,6 +1,6 @@
 import { mkdir, readdir, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
-import { PermissionFlagsBits as P, ChannelType } from 'discord.js';
+import { PermissionFlagsBits as P, ChannelType, RESTJSONErrorCodes } from 'discord.js';
 export function privateChannel(channel,guild,staffRoleId,botId) {
   if(channel.permissionsFor(guild.roles.everyone)?.has(P.ViewChannel)) return false;
   for(const overwrite of channel.permissionOverwrites.cache.values()) {
@@ -12,6 +12,18 @@ export function privateChannel(channel,guild,staffRoleId,botId) {
   }
   return true;
 }
+async function deletePreviousTikTokAlert(store,guild,channel,creator) {
+  const previous = store.tiktokLiveMessage(creator);
+  if (!previous) return;
+  try {
+    const previousChannel = previous.channel === channel.id ? channel : await guild.channels.fetch(previous.channel);
+    if (previousChannel) await previousChannel.messages.delete(previous.message);
+  } catch (error) {
+    if (error.code !== RESTJSONErrorCodes.UnknownMessage && error.code !== RESTJSONErrorCodes.UnknownChannel) throw error;
+  }
+  store.forgetTikTokLiveMessage(creator);
+}
+
 export function createDelivery({store,client,env,now=Date.now}) {
   let busy=false;
   async function flush() {
@@ -22,7 +34,7 @@ export function createDelivery({store,client,env,now=Date.now}) {
         try {
           const guild=await client.guilds.fetch(env.GUILD_ID);
           const channel=await guild.channels.fetch(item.channel);
-          if(!channel||channel.type!==ChannelType.GuildText) throw Error('Log channel unavailable');
+          if(!channel||channel.type!==ChannelType.GuildText) throw Error('Delivery channel unavailable');
           await guild.roles.fetch();
           if(item.private&&!privateChannel(channel,guild,env.STAFF_ROLE_ID,client.user.id)) throw Error('Private delivery blocked by channel permissions');
           const payload=JSON.parse(item.payload);
@@ -31,8 +43,13 @@ export function createDelivery({store,client,env,now=Date.now}) {
             payload.content=payload.embeds.map(e=>[e.title,e.description,...(e.fields||[]).map(f=>f.name+': '+f.value)].filter(Boolean).join('\n')).join('\n').slice(0,2000);
             delete payload.embeds;
           }
-          await channel.send({...payload,allowedMentions:{parse:[]}});
-          store.delivered(item.id);
+          if(item.tiktok_creator) {
+            if(!channel.permissionsFor(me)?.has([P.ViewChannel,P.SendMessages])) throw Error('TikTok alert channel unavailable');
+            await deletePreviousTikTokAlert(store,guild,channel,item.tiktok_creator);
+          }
+          const message = await channel.send({...payload,allowedMentions:{parse:[]}});
+          if(item.tiktok_creator) store.completeTikTokLiveDelivery(item.id,item.tiktok_creator,item.channel,message.id);
+          else store.delivered(item.id);
         } catch { store.failed(item.id,item.attempts+1,now()); store.set('health:delivery',{time:now(),message:'Delivery pending. Check channel access and staff-only permissions.'}); }
       }
     } finally { busy=false; }
