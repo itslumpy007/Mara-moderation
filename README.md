@@ -59,12 +59,13 @@ Failed welcomes stay queued across restarts and retry with increasing delays whi
 
 ## TikTok LIVE alerts
 
-Mara can post one message per TikTok livestream in a Discord text channel you choose. Euler Stream’s [Community plan](https://www.eulerstream.com/pricing) lists five creator alerts. The creator list and channel are set in Railway variables.
+Mara can post one message per TikTok livestream in a Discord text channel you choose. Euler Stream’s [Community plan](https://www.eulerstream.com/pricing) lists five creator alerts. Manage the creator list, destination channel, and pause toggle in Mara’s **TikTok LIVE** dashboard section.
 
 1. Keep Mara’s dashboard enabled and reachable over HTTPS. Choose the Discord channel and give Mara View Channel and Send Messages there.
-2. In Railway, set `TIKTOK_LIVE_CHANNEL_ID` to that channel’s ID, `TIKTOK_LIVE_CREATORS` to a comma-separated list such as `@creator_one,creator.two`, and `EULER_WEBHOOK_SECRET` to the account webhook secret from the Euler Stream dashboard. Set `TIKTOK_LIVE_ENABLED=true` to enable the endpoint.
-3. In Euler Stream, [create a LIVE alert](https://www.eulerstream.com/docs/sign-server/live-alerts) for each selected creator. Point each alert’s target at `<PUBLIC_BASE_URL>/webhooks/tiktok-live`. In the target metadata, set `platformUsername` to that creator’s TikTok handle to identify deliveries that omit the handle.
-4. Verify the first live alert in the selected channel. Mara queues signed alerts before acknowledging them and ignores repeat deliveries for the same livestream.
+2. In Railway, set `EULER_WEBHOOK_SECRET` to the account webhook secret from Euler Stream. The secret stays in Railway.
+3. Sign into Mara’s dashboard with Manage Server permission. Open **TikTok LIVE**, choose the Discord channel, add the creators, enable alerts, and save. Dashboard changes apply to new alerts. Existing Railway channel, creator, and enabled values are defaults until the first dashboard save.
+4. In Euler Stream, [create a LIVE alert](https://www.eulerstream.com/docs/sign-server/live-alerts) for each selected creator and paste the webhook URL shown in Mara’s dashboard as its target. In the target metadata, set `platformUsername` to that creator’s TikTok handle to identify deliveries that omit the handle. Update your Euler Stream subscriptions whenever you change the list in Mara.
+5. Verify the first live alert in the selected channel. Mara queues signed alerts before acknowledging them and ignores repeat deliveries for the same livestream.
 
 ## Railway
 

@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { createDashboard } from '../src/dashboard.js';
 import { createStore } from '../src/store.js';
-import { createTikTokLiveHandler, tiktokLivePath } from '../src/tiktok-live.js';
+import { tiktokLivePath } from '../src/tiktok-live.js';
 
 const env = {
   DASHBOARD_ENABLED:'true', TIKTOK_LIVE_ENABLED:'true',
@@ -18,7 +18,7 @@ const env = {
 
 async function listen(t,store,settings=env) {
   const server = createDashboard({
-    env:settings,store,client:{isReady:()=>true},tiktokLive:createTikTokLiveHandler({env:settings,store})
+    env:settings,store,client:{isReady:()=>true}
   });
   server.listen(0,'127.0.0.1');
   await once(server,'listening');
@@ -89,7 +89,8 @@ test('feature is off by default and requires a channel, an allowlist and signatu
   t.after(()=>store.close());
   const url = await listen(t,store,{...env,TIKTOK_LIVE_ENABLED:'false'});
   assert.equal((await deliver(url,'{}')).status,404);
-  assert.throws(()=>createTikTokLiveHandler({store,env:{...env,TIKTOK_LIVE_CHANNEL_ID:''}}),/TIKTOK_LIVE_CHANNEL_ID/);
-  assert.throws(()=>createTikTokLiveHandler({store,env:{...env,TIKTOK_LIVE_CREATORS:'user, bad handle'}}),/TIKTOK_LIVE_CREATORS/);
-  assert.throws(()=>createTikTokLiveHandler({store,env:{...env,EULER_WEBHOOK_SECRET:''}}),/EULER_WEBHOOK_SECRET/);
+  for(const overrides of [{TIKTOK_LIVE_CHANNEL_ID:''},{TIKTOK_LIVE_CREATORS:'user, bad handle'},{EULER_WEBHOOK_SECRET:''}]){
+    const inactive = await listen(t,store,{...env,...overrides});
+    assert.equal((await deliver(inactive,'{}')).status,404);
+  }
 });

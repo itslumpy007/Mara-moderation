@@ -3,7 +3,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { PermissionFlagsBits as P } from 'discord.js';
 import { config, configurableIds, saveConfig } from './config.js';
-import { tiktokLivePath } from './tiktok-live.js';
+import { createTikTokLiveHandler, getTikTokLiveDashboard, saveTikTokLiveSettings, tiktokLivePath } from './tiktok-live.js';
 import { rulesVersion } from './verification.js';
 import { settings, validateAutomod } from './automod.js';
 
@@ -22,7 +22,8 @@ export async function validateChallenge(response,env,fetchImpl=fetch) {
   const result=await res.json();
   if(!result.success||result.hostname!==new URL(env.PUBLIC_BASE_URL).hostname||result.action!=='mara_verify') throw Error('CAPTCHA failed or expired. Refresh the challenge.');
 }
-export function createDashboard({client,store,env,verification,audit,tiktokLive,fetchImpl=fetch,now=Date.now}) {
+export function createDashboard({client,store,env,verification,audit,fetchImpl=fetch,now=Date.now}) {
+  const tiktokLive=createTikTokLiveHandler({env,store});
   const origin=new URL(env.PUBLIC_BASE_URL);
   if(origin.protocol!=='https:'&&!['localhost','127.0.0.1'].includes(origin.hostname)) throw Error('PUBLIC_BASE_URL must use HTTPS.');
   if(origin.username||origin.password||origin.pathname!=='/'||origin.search||origin.hash) throw Error('PUBLIC_BASE_URL must be a plain origin, without a path.');
@@ -50,7 +51,6 @@ export function createDashboard({client,store,env,verification,audit,tiktokLive,
       if(rate.count>180) return json(res,429,{error:'Too many requests. Try again in one minute.'});
       if(url.pathname==='/health') return json(res,client.isReady()?200:503,{ready:client.isReady()});
       if(url.pathname===tiktokLivePath) {
-        if(!tiktokLive) return json(res,404,{error:'Not found.'});
         return await tiktokLive(req,res);
       }
       const files={'/blacklisted-logo.png':'blacklisted-logo.png','/':'index.html','/verify':'verify.html','/app.js':'app.js','/verify.js':'verify.js','/style.css':'style.css'};
@@ -106,6 +106,10 @@ export function createDashboard({client,store,env,verification,audit,tiktokLive,
       }
       if(req.method==='POST'&&url.pathname==='/api/review') return json(res,200,{message:await verification.request(member)});
       if(!admin) return json(res,403,{error:'Manage Server is required to use the staff dashboard.'});
+      if(url.pathname==='/api/tiktok-live') {
+        if(req.method==='GET') return json(res,200,await getTikTokLiveDashboard(store,env,guild,member,base));
+        return json(res,200,await saveTikTokLiveSettings(store,env,guild,member,await readJSON(req)));
+      }
       if(req.method==='GET'&&url.pathname==='/api/state') {
         const effective={...config(store)}; for(const key of configurableIds) effective[key]=env[key]||'';
         return json(res,200,{name:guild.name,ready:client.isReady(),uptime:Math.floor(process.uptime()),config:effective,automod:settings(store),cases:store.cases(),queue:store.queueSize(),backup:store.get('health:backup'),delivery:store.get('health:delivery'),pausedUntil:store.get('raid:pausedUntil',0),reviews:store.list('verify-review:').map(r=>({user:r.key.slice(14),...r.value})),tickets:store.list('ticket-meta:').slice(-100).map(r=>({id:r.key.slice(12),...r.value}))});

@@ -1,10 +1,15 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { ChannelType, PermissionFlagsBits as P } from 'discord.js';
 
 export const tiktokLivePath = '/webhooks/tiktok-live';
 const maxBodyBytes = 128 * 1024;
 const handlePattern = /^[a-z0-9_.]{1,24}$/;
 const roomPattern = /^[1-9]\d{0,29}$/;
 const handle = value => typeof value === 'string' ? value.trim().toLowerCase().replace(/^@/, '') : '';
+const settingsKey = 'tiktok-live:settings';
+const channelPattern = /^\d{17,20}$/;
+const normalizeCreators = values => [...new Set(values.map(handle))];
+const secretConfigured = env => Boolean(env.EULER_WEBHOOK_SECRET?.trim());
 const firstText = (...values) => values.find(value => typeof value === 'string' && value.length);
 
 function readAlert(body) {
@@ -31,23 +36,68 @@ function readAlert(body) {
   return { username, roomId };
 }
 
-export function createTikTokLiveHandler({ env, store }) {
-  if (env.TIKTOK_LIVE_ENABLED !== 'true') return undefined;
-  if (env.DASHBOARD_ENABLED !== 'true') throw Error('TikTok LIVE alerts require the Mara dashboard.');
-  const channel = env.TIKTOK_LIVE_CHANNEL_ID;
-  const secret = env.EULER_WEBHOOK_SECRET;
-  const creators = new Set((env.TIKTOK_LIVE_CREATORS ?? '').split(',').map(handle));
-  if (!/^\d{17,20}$/.test(channel ?? '')) throw Error('Set TIKTOK_LIVE_CHANNEL_ID to a valid Discord text channel ID.');
-  if (!secret?.trim()) throw Error('Set EULER_WEBHOOK_SECRET to the Euler Stream account webhook secret.');
-  if ([...creators].some(value => !handlePattern.test(value))) {
-    throw Error('Set TIKTOK_LIVE_CREATORS to a comma-separated list of TikTok usernames.');
-  }
+export function getTikTokLiveSettings(store, env) {
+  return store.get(settingsKey, {
+    enabled: env.TIKTOK_LIVE_ENABLED === 'true',
+    channelId: env.TIKTOK_LIVE_CHANNEL_ID ?? '',
+    creators: normalizeCreators((env.TIKTOK_LIVE_CREATORS ?? '').split(',').filter(value => value.trim()))
+  });
+}
 
+const canPost = (channel, guild, actor, bot) => channel?.guildId === guild.id &&
+  channel.type === ChannelType.GuildText && channel.permissionsFor(actor)?.has(P.ViewChannel) &&
+  channel.permissionsFor(bot)?.has([P.ViewChannel, P.SendMessages]);
+
+export async function getTikTokLiveDashboard(store, env, guild, actor, base) {
+  const saved = getTikTokLiveSettings(store, env);
+  let channels = [], channelsAvailable = true;
+  try {
+    const [all, bot] = await Promise.all([guild.channels.fetch(), guild.members.fetchMe()]);
+    channels = [...all.values()].filter(channel => canPost(channel, guild, actor, bot))
+      .sort((a,b) => a.name.localeCompare(b.name))
+      .map(channel => ({ id: channel.id, name: channel.name }));
+  } catch {
+    channelsAvailable = false;
+  }
+  return {
+    ...saved, providerConfigured: secretConfigured(env), channels, channelsAvailable,
+    webhookUrl: new URL(tiktokLivePath, base).href
+  };
+}
+
+export async function saveTikTokLiveSettings(store, env, guild, actor, input) {
+  const { enabled, channelId, creators } = input;
+  if (typeof enabled !== 'boolean' || typeof channelId !== 'string' ||
+    (channelId !== '' && !channelPattern.test(channelId)) || !Array.isArray(creators)) {
+    throw Error('Provide an alert setting, a Discord text channel, and a list of TikTok usernames.');
+  }
+  const handles = normalizeCreators(creators);
+  if (handles.some(value => !handlePattern.test(value))) throw Error('Enter TikTok usernames, one per line.');
+  if (enabled && !secretConfigured(env)) throw Error('Add EULER_WEBHOOK_SECRET in Railway before enabling alerts.');
+  if (enabled && (!channelId || !handles.length)) throw Error('Choose a channel and add at least one creator.');
+  if (channelId && (enabled || channelId !== getTikTokLiveSettings(store, env).channelId)) {
+    const [channel, bot] = await Promise.all([guild.channels.fetch(channelId), guild.members.fetchMe()])
+      .catch(() => { throw Error('Could not check the alert channel. Try again.'); });
+    if (!canPost(channel, guild, actor, bot)) throw Error('Choose a text channel you can view and Mara can post in.');
+  }
+  const saved = { enabled, channelId, creators: handles };
+  store.set(settingsKey,saved);
+  return saved;
+}
+
+function activeTikTokLiveSettings(store, env) {
+  const saved = getTikTokLiveSettings(store, env);
+  if (saved.enabled && secretConfigured(env) && channelPattern.test(saved.channelId) && saved.creators.length &&
+    saved.creators.every(value => handlePattern.test(value))) return saved;
+}
+
+export function createTikTokLiveHandler({ env, store }) {
   return async (req, res) => {
     const reply = (status, content) => {
       res.writeHead(status, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(content));
     };
+    if (!activeTikTokLiveSettings(store, env)) return reply(404, { error: 'Not found.' });
     if (req.method !== 'POST') {
       res.setHeader('Allow', 'POST');
       return reply(405, { error: 'POST required.' });
@@ -59,7 +109,7 @@ export function createTikTokLiveHandler({ env, store }) {
     if (Number(req.headers['content-length']) > maxBodyBytes) return reply(413, { error: 'Alert is too large.' });
     const chunks = [];
     let bytes = 0;
-    const hmac = createHmac('sha256', secret);
+    const hmac = createHmac('sha256', env.EULER_WEBHOOK_SECRET);
     for await (const chunk of req.iterator({ destroyOnReturn: false })) {
       bytes += chunk.length;
       if (bytes > maxBodyBytes) {
@@ -79,7 +129,8 @@ export function createTikTokLiveHandler({ env, store }) {
     } catch {
       return reply(400, { error: 'Invalid TikTok LIVE alert.' });
     }
-    if (!alert || !creators.has(alert.username)) return reply(200, { ignored: true });
+    const settings = activeTikTokLiveSettings(store, env);
+    if (!alert || !settings?.creators.includes(alert.username)) return reply(200, { ignored: true });
 
     const { username, roomId } = alert;
     const nonce = createHash('sha256').update('tiktok:' + username + ':' + roomId).digest('hex').slice(0, 24);
@@ -88,7 +139,7 @@ export function createTikTokLiveHandler({ env, store }) {
       allowedMentions: { parse: [] }, nonce, enforceNonce: true
     };
     try {
-      const queued = store.enqueueTikTokLive(username, roomId, channel, payload);
+      const queued = store.enqueueTikTokLive(username, roomId, settings.channelId, payload);
       return reply(200, { queued });
     } catch {
       console.error('TikTok LIVE alert could not enter the delivery queue.');

@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 import { once } from 'node:events';
-import { PermissionsBitField, PermissionFlagsBits as P } from 'discord.js';
+import { ChannelType, PermissionsBitField, PermissionFlagsBits as P } from 'discord.js';
 import { createDashboard, validateChallenge } from '../src/dashboard.js';
 import { createStore } from '../src/store.js';
 test('Turnstile requires successful server validation, matching hostname and action',async()=>{
@@ -15,9 +16,17 @@ test('Turnstile requires successful server validation, matching hostname and act
 test('dashboard login state, CSRF, authorization, logout, and revocation are enforced',async t=>{
  const store=createStore(':memory:');let manager=true,grants=0;
  const member={id:'123456789012345678',get permissions(){return new PermissionsBitField(manager?[P.ManageGuild]:[]);}};
- const guild={name:'Test server',roles:{fetch:async()=>{}},members:{fetch:async()=>member,fetchMe:async()=>({})}};
+ const guildId='guild', bot={}, channelId='900000000000000001', otherId='900000000000000002', restrictedId='900000000000000003';
+ const channel=(id,name,permitted=true)=>({id,name,guildId,type:ChannelType.GuildText,
+  permissionsFor:actor=>new PermissionsBitField(actor===bot&&permitted?[P.ViewChannel,P.SendMessages]:[P.ViewChannel])});
+ const channels=new Map([
+  [channelId,channel(channelId,'live-now')],[otherId,channel(otherId,'tiktok')],
+  [restrictedId,channel(restrictedId,'restricted',false)]
+ ]);
+ const guild={id:guildId,name:'Test server',roles:{fetch:async()=>{}},members:{fetch:async()=>member,fetchMe:async()=>bot},
+  channels:{fetch:async id=>id?channels.get(id):channels}};
  const client={isReady:()=>true,guilds:{fetch:async()=>guild}};
- const env={PUBLIC_BASE_URL:'http://localhost:3000',CLIENT_ID:'client',DISCORD_CLIENT_SECRET:'never-expose',GUILD_ID:'guild',OPENAI_API_KEY:'also-secret'};
+ const env={PUBLIC_BASE_URL:'http://localhost:3000',CLIENT_ID:'client',DISCORD_CLIENT_SECRET:'never-expose',GUILD_ID:'guild',OPENAI_API_KEY:'also-secret',EULER_WEBHOOK_SECRET:'private-webhook-test-secret'};
  let time=10000;
  const server=createDashboard({store,client,env,now:()=>time,verification:{grant:async()=>{grants++;return 'verified';},request:async()=> 'queued'},audit:async()=>{},fetchImpl:async url=>({ok:true,json:async()=>url.endsWith('/token')?{access_token:'oauth-private'}:{id:member.id,username:'Test user'}})});
  server.listen(0,'127.0.0.1');await once(server,'listening');
@@ -25,6 +34,7 @@ test('dashboard login state, CSRF, authorization, logout, and revocation are enf
  const base='http://127.0.0.1:'+server.address().port;
  const request=(path,options={})=>fetch(base+path,{redirect:'manual',...options});
  assert.equal((await request('/api/state')).status,401);
+ assert.equal((await request('/api/tiktok-live')).status,401);
  assert.equal((await request('/oauth/callback?state=forged&code=code')).status,403);
  const login=await request('/login?next=/verify');
  const state=new URL(login.headers.get('location')).searchParams.get('state');
@@ -44,7 +54,36 @@ test('dashboard login state, CSRF, authorization, logout, and revocation are enf
  assert.equal((await post('/api/verify',{accepted:false})).status,400);assert.equal(grants,0);
  assert.equal((await post('/api/verify',{accepted:true,rulesVersion:me.rulesVersion})).status,200);assert.equal(grants,1);
  assert.equal((await post('/api/verify',{accepted:true,rulesVersion:'stale'})).status,400);assert.equal(grants,1);
+ const tiktok=await (await request('/api/tiktok-live',{headers:{cookie}})).json();
+ assert.equal(tiktok.enabled,false);
+ assert.equal(tiktok.providerConfigured,true);
+ assert.deepEqual(tiktok.channels,[{id:channelId,name:'live-now'},{id:otherId,name:'tiktok'}]);
+ assert.equal(tiktok.webhookUrl,env.PUBLIC_BASE_URL+'/webhooks/tiktok-live');
+ assert.equal(JSON.stringify(tiktok).includes(env.EULER_WEBHOOK_SECRET),false);
+ const settings={enabled:true,channelId,creators:['@Alpha','alpha','Second.Creator']};
+ assert.equal((await post('/api/tiktok-live',settings,{'X-CSRF-Token':'wrong'})).status,403);
+ assert.equal((await post('/api/tiktok-live',{...settings,channelId:restrictedId})).status,400);
+ assert.equal((await post('/api/tiktok-live',{...settings,creators:['not a handle']})).status,400);
+ assert.equal((await post('/api/tiktok-live',{...settings,creators:[]})).status,400);
+ const saved=await post('/api/tiktok-live',settings);
+ assert.equal(saved.status,200);
+ assert.deepEqual(await saved.json(),{enabled:true,channelId,creators:['alpha','second.creator']});
+ const signed=async(username,room)=>{
+  const body=JSON.stringify({unique_id:username,room_id:room});
+  const signature=createHmac('sha256',env.EULER_WEBHOOK_SECRET).update(body).digest('hex');
+  return request('/webhooks/tiktok-live',{method:'POST',body,headers:{'X-Webhook-Signature':signature}});
+ };
+ assert.deepEqual(await (await signed('alpha','101')).json(),{queued:true});
+ assert.equal(store.pending()[0].channel,channelId);
+ assert.equal((await post('/api/tiktok-live',{...settings,channelId:otherId,creators:['beta']})).status,200);
+ assert.deepEqual(await (await signed('alpha','102')).json(),{ignored:true});
+ assert.deepEqual(await (await signed('beta','103')).json(),{queued:true});
+ assert.equal(store.pending().at(-1).channel,otherId);
+ assert.equal((await post('/api/tiktok-live',{...settings,enabled:false,channelId:otherId})).status,200);
+ assert.equal((await signed('beta','104')).status,404);
  manager=false;
+ assert.equal((await request('/api/tiktok-live',{headers:{cookie}})).status,403);
+ assert.equal((await post('/api/tiktok-live',settings)).status,403);
  assert.equal((await request('/api/state',{headers:{cookie}})).status,403);
  assert.equal((await post('/api/config',{minAccountDays:0})).status,403);
  assert.equal((await post('/api/logout',{})).status,200);

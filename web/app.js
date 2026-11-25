@@ -1,4 +1,4 @@
-let csrf='',before=null;
+let csrf='',before=null,tiktokLiveState;
 const el=id=>document.getElementById(id);
 function notice(text,error=false){el('notice').textContent=text;el('notice').classList.toggle('error',error);}
 async function api(path,body){
@@ -29,11 +29,47 @@ function form(container,spec,values){
 function values(container,spec){const result={};for(const [key,,type='text'] of spec){const input=el(container).querySelector('[name="'+key+'"]');result[key]=type==='checkbox'?input.checked:type==='number'?Number(input.value):type==='array'?input.value.split('\n').map(x=>x.trim()).filter(Boolean):input.value;}return result;}
 function record(container,title,text,foot=''){const card=document.createElement('article');card.className='record';for(const [tag,value] of [['h3',title],['p',text],['small',foot]]){const node=document.createElement(tag);node.textContent=value;card.append(node);}el(container).append(card);}
 function cases(items,append=false){if(!append)el('cases').replaceChildren();for(const c of items)record('cases','#'+c.id+' • '+c.type+(c.revoked?' • REVOKED':''),'Member '+c.target+' · Staff '+c.actor+'\n'+c.reason+(c.revoked?'\nRevocation: '+c.revoke_reason:''),c.created);before=items.at(-1)?.id;el('older').hidden=!before;if(!items.length&&!append)record('cases','No cases found','Try a different member ID.');}
-async function refresh(){const state=await api('/api/state');el('subtitle').textContent=state.name;el('online').textContent=state.ready?'Connected':'Disconnected';el('uptime').textContent=Math.floor(state.uptime/3600)+'h '+Math.floor(state.uptime%3600/60)+'m';el('queue').textContent=state.queue;el('backup').textContent=state.backup?new Date(state.backup.time).toLocaleDateString():'Not yet';el('delivery').textContent=state.queue?'Pending deliveries retry automatically. '+(state.delivery?.message||''):'';el('pause').textContent=state.pausedUntil>Date.now()?'Verification paused until '+new Date(state.pausedUntil).toLocaleTimeString():'';form('settings-fields',settingsSpec,state.config);form('automod-fields',automodSpec,state.automod);cases(state.cases);el('target').value='';el('reviews').replaceChildren();el('ticket-list').replaceChildren();for(const review of state.reviews)record('reviews','Verification review',review.user,new Date(review.created).toLocaleString());for(const ticket of state.tickets)record('ticket-list',ticket.category+' • '+ticket.status,'Ticket '+ticket.id+' · Member '+ticket.owner+'\nAssigned to '+(ticket.claimedBy||'unclaimed')+(ticket.rating?' · Rating '+ticket.rating+'/5':''));}
+function tiktokLiveMessage(text,error=false){
+ const output=el('tiktok-live-status');output.textContent=text;output.classList.toggle('field-error',error);
+}
+function renderTikTokLive(state){
+ tiktokLiveState=state;
+ const channel=el('tiktok-live-channel');
+ const options=[new Option('Choose a text channel','')];
+ if(state.channelId&&!state.channels.some(item=>item.id===state.channelId)){
+  options.push(new Option('Current channel is unavailable',state.channelId));
+ }
+ for(const item of state.channels)options.push(new Option('#'+item.name,item.id));
+ channel.replaceChildren(...options);
+ channel.value=state.channelId;
+ el('tiktok-live-creators').value=state.creators.join('\n');
+ el('tiktok-live-webhook').value=state.webhookUrl;
+ el('tiktok-live-enabled').checked=state.enabled;
+ if(!state.providerConfigured)tiktokLiveMessage('Add EULER_WEBHOOK_SECRET in Railway to enable alerts.');
+ else if(!state.channelsAvailable)tiktokLiveMessage('Could not load Discord channels. Refresh to try again.',true);
+ else if(state.enabled&&!state.channels.some(item=>item.id===state.channelId))tiktokLiveMessage('Alerts are enabled, but the selected channel is unavailable.',true);
+ else tiktokLiveMessage(state.enabled?'Alerts enabled. Changes apply to new alerts.':'Alerts paused.');
+}
+async function refreshTikTokLive(){
+ try{renderTikTokLive(await api('/api/tiktok-live'));el('tiktok-live-save').disabled=false;}
+ catch(error){tiktokLiveState=null;el('tiktok-live-save').disabled=true;tiktokLiveMessage(error.message,true);}
+}
+async function refresh(){const [state]=await Promise.all([api('/api/state'),refreshTikTokLive()]);el('subtitle').textContent=state.name;el('online').textContent=state.ready?'Connected':'Disconnected';el('uptime').textContent=Math.floor(state.uptime/3600)+'h '+Math.floor(state.uptime%3600/60)+'m';el('queue').textContent=state.queue;el('backup').textContent=state.backup?new Date(state.backup.time).toLocaleDateString():'Not yet';el('delivery').textContent=state.queue?'Pending deliveries retry automatically. '+(state.delivery?.message||''):'';el('pause').textContent=state.pausedUntil>Date.now()?'Verification paused until '+new Date(state.pausedUntil).toLocaleTimeString():'';form('settings-fields',settingsSpec,state.config);form('automod-fields',automodSpec,state.automod);cases(state.cases);el('target').value='';el('reviews').replaceChildren();el('ticket-list').replaceChildren();for(const review of state.reviews)record('reviews','Verification review',review.user,new Date(review.created).toLocaleString());for(const ticket of state.tickets)record('ticket-list',ticket.category+' • '+ticket.status,'Ticket '+ticket.id+' · Member '+ticket.owner+'\nAssigned to '+(ticket.claimedBy||'unclaimed')+(ticket.rating?' · Rating '+ticket.rating+'/5':''));}
 function bind(id,event,action){el(id).addEventListener(event,async e=>{e.preventDefault();const button=e.currentTarget.tagName==='BUTTON'?e.currentTarget:e.currentTarget.querySelector('button');if(button)button.disabled=true;try{await action();}catch(error){notice(error.message,true);}finally{if(button)button.disabled=false;}});}
 bind('refresh','click',async()=>{await refresh();notice('Updated server status.');});
 bind('settings-form','submit',async()=>{await api('/api/config',values('settings-fields',settingsSpec));notice('Server settings saved.');});
 bind('automod-form','submit',async()=>{await api('/api/automod',values('automod-fields',automodSpec));notice('Protection settings saved.');});
+bind('tiktok-live-form','submit',async()=>{
+ if(!tiktokLiveState)return;
+ try{
+  const saved=await api('/api/tiktok-live',{
+   enabled:el('tiktok-live-enabled').checked,channelId:el('tiktok-live-channel').value,
+   creators:el('tiktok-live-creators').value.split(/[\r\n,]+/).map(value=>value.trim()).filter(Boolean)
+  });
+  renderTikTokLive({...tiktokLiveState,...saved});
+  const output=el('tiktok-live-status');output.textContent='Saved. '+output.textContent;
+ }catch(error){tiktokLiveMessage(error.message,true);}
+});
 bind('case-search','submit',async()=>cases((await api('/api/cases?target='+encodeURIComponent(el('target').value.trim()))).cases));
 bind('older','click',async()=>cases((await api('/api/cases?target='+encodeURIComponent(el('target').value.trim())+'&before='+before)).cases,true));
 bind('logout','click',async()=>{await api('/api/logout',{});location.reload();});
