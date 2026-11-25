@@ -10,6 +10,12 @@ export function createStore(path) {
       revoked INTEGER NOT NULL DEFAULT 0, revoke_reason TEXT, revoked_by TEXT
     );
     CREATE INDEX IF NOT EXISTS cases_target ON cases(target,id);
+    CREATE TABLE IF NOT EXISTS moderation_requests (
+      id TEXT PRIMARY KEY, guild TEXT NOT NULL, actor TEXT NOT NULL, target TEXT NOT NULL,
+      type TEXT NOT NULL CHECK (type IN ('kick', 'ban')), reason TEXT NOT NULL,
+      expires INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'pending'
+    );
+    CREATE INDEX IF NOT EXISTS moderation_requests_expiry ON moderation_requests(expires);
     CREATE TABLE IF NOT EXISTS outbox (
       id INTEGER PRIMARY KEY AUTOINCREMENT, channel TEXT NOT NULL, payload TEXT NOT NULL,
       private INTEGER NOT NULL DEFAULT 0, attempts INTEGER NOT NULL DEFAULT 0,
@@ -23,6 +29,37 @@ export function createStore(path) {
     list(prefix) { return db.prepare('SELECT key,value FROM kv WHERE substr(key,1,?)=?').all(prefix.length,prefix).map(r=>({key:r.key,value:JSON.parse(r.value)})); },
     delete(key) { db.prepare('DELETE FROM kv WHERE key=?').run(key); },
     addCase,
+    createModerationRequest({id,guild,actor,target,type,reason,expires}) {
+      db.prepare('DELETE FROM moderation_requests WHERE expires <= ?').run(expires - 86400000);
+      db.prepare('INSERT INTO moderation_requests(id,guild,actor,target,type,reason,expires) VALUES (?,?,?,?,?,?,?)')
+        .run(id,guild,actor,target,type,reason,expires);
+    },
+    moderationRequest(id) {
+      return db.prepare('SELECT * FROM moderation_requests WHERE id=?').get(id);
+    },
+    claimModerationRequest(id, now) {
+      return db.prepare(
+        "UPDATE moderation_requests SET status='processing' WHERE id=? AND status='pending' AND expires>?"
+      ).run(id,now).changes === 1;
+    },
+    setModerationRequestStatus(id, status) {
+      db.prepare("UPDATE moderation_requests SET status=? WHERE id=? AND status='processing'").run(status,id);
+    },
+    completeModerationRequest(request) {
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        const result = db.prepare(
+          "UPDATE moderation_requests SET status='completed' WHERE id=? AND status='processing'"
+        ).run(request.id);
+        if (result.changes !== 1) throw Error('Moderation request is no longer processing.');
+        const caseId = addCase(request);
+        db.exec('COMMIT');
+        return caseId;
+      } catch (error) {
+        db.exec('ROLLBACK');
+        throw error;
+      }
+    },
     case(id) { return db.prepare('SELECT * FROM cases WHERE id=?').get(id) || null; },
     cases({target='',before=Number.MAX_SAFE_INTEGER,limit=20}={}) {
       return db.prepare("SELECT * FROM cases WHERE id < ? AND (? = '' OR target=?) ORDER BY id DESC LIMIT ?").all(before,target,target,Math.min(100,Math.max(1,limit)));

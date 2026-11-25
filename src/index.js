@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { Client, GatewayIntentBits as I, Partials, PermissionFlagsBits as P, ChannelType, MessageFlags } from 'discord.js';
 import { createStore } from './store.js';
 import { canTarget, safeRole } from './security.js';
+import { createModerationConfirmation } from './moderation-confirmation.js';
 import { createAutomod, settings, validateAutomod } from './automod.js';
 import { createAI } from './ai.js';
 import { logCard } from './log-style.js';
@@ -38,6 +39,7 @@ async function audit(g,text) {
   try { delivery.enqueue(env.LOG_CHANNEL_ID,logCard(text,client.user?.displayAvatarURL())); }
   catch { console.error('Could not deliver an audit log. Check channel permissions.'); }
 }
+const moderationConfirmation=createModerationConfirmation({store,audit});
 const verification=createVerification({store,env,audit});
 const tickets=createTickets({store,env,client,audit,ai,dataDir});
 const staffTools=createStaffTools({store,env,audit,backupNow,verification,tickets});
@@ -56,6 +58,7 @@ client.on('interactionCreate',async i => {
   if (!i.isChatInputCommand() && !i.isButton() && !i.isStringSelectMenu()) return;
   if (!allowed(i.guild)) return i.reply({content:'Mara is configured for a different server.',flags:MessageFlags.Ephemeral});
   try {
+    if (i.isButton() && moderationConfirmation.matches(i.customId)) return await moderationConfirmation.handle(i);
     await i.deferReply({flags:MessageFlags.Ephemeral});
     const actor = await i.guild.members.fetch(i.user.id);
     const me = await i.guild.members.fetchMe();
@@ -111,8 +114,13 @@ client.on('interactionCreate',async i => {
       return await i.editReply({ content: `AI draft — verify against the original report.\n${summary}`, allowedMentions: { parse: [] } });
     }
     if (n==='help') return await i.editReply('Mara • The Blacklisted\nModeration: /warn /warnings /warn-remove /case /history /timeout /untimeout /kick /ban /unban /purge\nSetup: /category-permissions /rules /channel-style /channel-style-bulk /setup-check /config /welcome /panel /rolepanel /automod /protection /verification /raid /escalation /backup\nTickets: /ticket-claim /ticket-transcript /ticket-ai /ticket-feedback /ticket-categories /close\nAI: /ai-summary /ai-context\nMembers: /custom /report\nStaff review: /verification-review\nMessages: /announce /custom-set /custom-delete');
-    if (['warn','warnings','timeout','untimeout','kick','ban'].includes(n)) {
-      requirePermission(actor,n==='kick'?P.KickMembers:n==='ban'?P.BanMembers:P.ModerateMembers);
+    if (n==='kick'||n==='ban') {
+      requirePermission(actor,n==='kick'?P.KickMembers:P.BanMembers);
+      const target=await i.guild.members.fetch(o.getUser('user',true).id);
+      return await moderationConfirmation.preview(i,n,actor,target,me,reason);
+    }
+    if (['warn','warnings','timeout','untimeout'].includes(n)) {
+      requirePermission(actor,P.ModerateMembers);
       const target=await i.guild.members.fetch(o.getUser('user',true).id);
       if (n==='warnings') return await i.editReply(('Active warnings: '+store.warningCount(target.id)+'\n'+store.cases({target:target.id,limit:100}).filter(c=>c.type==='warn'&&!c.revoked).slice(0,10).map(c=>'#'+c.id+' • '+c.reason).join('\n')).slice(0,1950));
       if (!canTarget(actor,target,i.guild.ownerId)) throw new Error('You cannot moderate yourself, the owner, bots, or equal/higher roles.');
@@ -123,8 +131,6 @@ client.on('interactionCreate',async i => {
         if(!target.isCommunicationDisabled()) return await i.editReply('That member is not currently timed out.');
         await target.timeout(null,why);
       }
-      if(n==='kick') { if(!target.kickable) throw new Error('Mara cannot kick that member.'); await target.kick(why); }
-      if(n==='ban') { if(!target.bannable) throw new Error('Mara cannot ban that member.'); await target.ban({reason:why,deleteMessageSeconds:0}); }
       const caseId=store.addCase({type:n,target:target.id,actor:i.user.id,reason});
       const extra=n==='warn'?await escalateWarning({store,target,caseId,botId:client.user.id}):'';
       await audit(i.guild,`${n.toUpperCase()} | target ${target.id} | staff ${i.user.id} | Case #${caseId}: ${reason}${extra}`);
