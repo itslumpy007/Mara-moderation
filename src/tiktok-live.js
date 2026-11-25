@@ -1,5 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
-import { ChannelType, PermissionFlagsBits as P } from 'discord.js';
+import { ChannelType, escapeMarkdown, PermissionFlagsBits as P } from 'discord.js';
 
 export const tiktokLivePath = '/webhooks/tiktok-live';
 const maxBodyBytes = 128 * 1024;
@@ -48,6 +48,43 @@ const canPost = (channel, guild, actor, bot) => channel?.guildId === guild.id &&
   channel.type === ChannelType.GuildText && channel.permissionsFor(actor)?.has(P.ViewChannel) &&
   channel.permissionsFor(bot)?.has([P.ViewChannel, P.SendMessages]);
 
+async function requireTikTokAlertChannel(guild, actor, channelId) {
+  if (typeof channelId !== 'string' || !channelPattern.test(channelId)) throw Error('Choose a Discord alert channel.');
+  const [channel, bot] = await Promise.all([guild.channels.fetch(channelId, { force: true }), guild.members.fetchMe()])
+    .catch(() => { throw Error('Could not check the alert channel. Try again.'); });
+  if (!canPost(channel, guild, actor, bot)) throw Error('Choose a text channel you can view and Mara can post in.');
+  return channel;
+}
+
+export function previewTikTokLiveAlert(creator) {
+  const username = handle(creator);
+  if (!handlePattern.test(username)) throw Error('Choose a valid TikTok username to preview or test.');
+  return {
+    handle: '@' + username,
+    announcement: 'went live on TikTok!',
+    watchLabel: 'Watch live',
+    watchUrl: 'https://www.tiktok.com/@' + username + '/live'
+  };
+}
+
+function tiktokLiveMessage(preview) {
+  return {
+    content: '🔴 **' + escapeMarkdown(preview.handle) + '** ' + preview.announcement +
+      '\n[' + preview.watchLabel + '](' + preview.watchUrl + ')',
+    allowedMentions: { parse: [] }
+  };
+}
+
+export async function sendTikTokLiveTest(guild, actor, { creator, channelId }) {
+  const payload = tiktokLiveMessage(previewTikTokLiveAlert(creator));
+  const channel = await requireTikTokAlertChannel(guild, actor, channelId);
+  const message = await channel.send({
+    ...payload,
+    content: '**TEST ALERT** · ' + payload.content
+  }).catch(() => { throw Error('Mara could not send the test alert. Check channel permissions and try again.'); });
+  return { url: 'https://discord.com/channels/' + guild.id + '/' + channel.id + '/' + message.id };
+}
+
 export async function getTikTokLiveDashboard(store, env, guild, actor, base) {
   const saved = getTikTokLiveSettings(store, env);
   let channels = [], channelsAvailable = true;
@@ -76,9 +113,7 @@ export async function saveTikTokLiveSettings(store, env, guild, actor, input) {
   if (enabled && !secretConfigured(env)) throw Error('Add EULER_WEBHOOK_SECRET in Railway before enabling alerts.');
   if (enabled && (!channelId || !handles.length)) throw Error('Choose a channel and add at least one creator.');
   if (channelId && (enabled || channelId !== getTikTokLiveSettings(store, env).channelId)) {
-    const [channel, bot] = await Promise.all([guild.channels.fetch(channelId), guild.members.fetchMe()])
-      .catch(() => { throw Error('Could not check the alert channel. Try again.'); });
-    if (!canPost(channel, guild, actor, bot)) throw Error('Choose a text channel you can view and Mara can post in.');
+    await requireTikTokAlertChannel(guild, actor, channelId);
   }
   const saved = { enabled, channelId, creators: handles };
   store.set(settingsKey,saved);
@@ -135,8 +170,7 @@ export function createTikTokLiveHandler({ env, store }) {
     const { username, roomId } = alert;
     const nonce = createHash('sha256').update('tiktok:' + username + ':' + roomId).digest('hex').slice(0, 24);
     const payload = {
-      content: '🔴 **@' + username + '** is live on TikTok! [Watch live](https://www.tiktok.com/@' + username + '/live)',
-      allowedMentions: { parse: [] }, nonce, enforceNonce: true
+      ...tiktokLiveMessage(previewTikTokLiveAlert(username)), nonce, enforceNonce: true
     };
     try {
       const queued = store.enqueueTikTokLive(username, roomId, settings.channelId, payload);

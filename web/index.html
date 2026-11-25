@@ -18,6 +18,19 @@
 </div>
 <div class="form-footer"><p id="tiktok-live-status" role="status"></p><button id="tiktok-live-save" class="primary" type="submit">Save TikTok LIVE settings</button></div>
 </form>
+<div class="tiktok-preview-tools">
+<label for="tiktok-live-preview-creator">Alert preview creator<select id="tiktok-live-preview-creator"></select></label>
+<div class="tiktok-preview-actions">
+<button id="tiktok-live-preview" type="button" aria-controls="tiktok-live-sample">Preview alert</button>
+<button id="tiktok-live-test" type="button">Send test alert</button>
+</div>
+</div>
+<p id="tiktok-live-preview-status" role="status"></p>
+<article id="tiktok-live-sample" class="record" aria-label="TikTok LIVE alert preview" hidden>
+<h3 id="tiktok-live-sample-label"></h3>
+<p>🔴 <strong id="tiktok-live-sample-handle"></strong> <span id="tiktok-live-sample-text"></span></p>
+<a id="tiktok-live-sample-url" target="_blank" rel="noopener noreferrer"></a>
+</article>
 </section>
 <section id="history"><div class="section-title"><h2>Every action has a record</h2><span>MODERATION</span></div><form id="case-search" class="search"><label>Member ID<input id="target" placeholder="All members" inputmode="numeric"></label><button type="submit">Search history</button></form><div id="cases" class="records"></div><button id="older">Load older cases</button></section>
 <section id="tickets"><div class="section-title"><h2>People waiting for a hand</h2><span>SUPPORT</span></div><p>Claim, close, export, or request an AI draft inside the ticket in Discord. Review verification requests with /verification-review.</p><div id="reviews" class="records"></div><div id="ticket-list" class="records"></div></section>

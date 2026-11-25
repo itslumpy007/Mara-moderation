@@ -3,7 +3,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { PermissionFlagsBits as P } from 'discord.js';
 import { config, configurableIds, saveConfig } from './config.js';
-import { createTikTokLiveHandler, getTikTokLiveDashboard, saveTikTokLiveSettings, tiktokLivePath } from './tiktok-live.js';
+import { createTikTokLiveHandler, getTikTokLiveDashboard, previewTikTokLiveAlert, saveTikTokLiveSettings, sendTikTokLiveTest, tiktokLivePath } from './tiktok-live.js';
 import { rulesVersion } from './verification.js';
 import { settings, validateAutomod } from './automod.js';
 
@@ -109,6 +109,12 @@ export function createDashboard({client,store,env,verification,audit,fetchImpl=f
       if(url.pathname==='/api/tiktok-live') {
         if(req.method==='GET') return json(res,200,await getTikTokLiveDashboard(store,env,guild,member,base));
         return json(res,200,await saveTikTokLiveSettings(store,env,guild,member,await readJSON(req)));
+      }
+      if(req.method==='POST'&&url.pathname==='/api/tiktok-live/preview') {
+        return json(res,200,previewTikTokLiveAlert((await readJSON(req)).creator));
+      }
+      if(req.method==='POST'&&url.pathname==='/api/tiktok-live/test') {
+        return json(res,200,await sendTikTokLiveTest(guild,member,await readJSON(req)));
       }
       if(req.method==='GET'&&url.pathname==='/api/state') {
         const effective={...config(store)}; for(const key of configurableIds) effective[key]=env[key]||'';

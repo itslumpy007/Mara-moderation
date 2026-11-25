@@ -16,8 +16,10 @@ test('Turnstile requires successful server validation, matching hostname and act
 test('dashboard login state, CSRF, authorization, logout, and revocation are enforced',async t=>{
  const store=createStore(':memory:');let manager=true,grants=0;
  const member={id:'123456789012345678',get permissions(){return new PermissionsBitField(manager?[P.ManageGuild]:[]);}};
+ const testPosts=[];
  const guildId='guild', bot={}, channelId='900000000000000001', otherId='900000000000000002', restrictedId='900000000000000003';
  const channel=(id,name,permitted=true)=>({id,name,guildId,type:ChannelType.GuildText,
+  async send(payload){testPosts.push({id,payload});return {id:'900000000000000004'};},
   permissionsFor:actor=>new PermissionsBitField(actor===bot&&permitted?[P.ViewChannel,P.SendMessages]:[P.ViewChannel])});
  const channels=new Map([
   [channelId,channel(channelId,'live-now')],[otherId,channel(otherId,'tiktok')],
@@ -81,9 +83,37 @@ test('dashboard login state, CSRF, authorization, logout, and revocation are enf
  assert.equal(store.pending().at(-1).channel,otherId);
  assert.equal((await post('/api/tiktok-live',{...settings,enabled:false,channelId:otherId})).status,200);
  assert.equal((await signed('beta','104')).status,404);
+ const previewInput={creator:'@Beta',channelId:otherId};
+ const previewResult=await post('/api/tiktok-live/preview',previewInput);
+ assert.equal(previewResult.status,200);
+ const preview=await previewResult.json();
+ assert.deepEqual(preview,{handle:'@beta',announcement:'went live on TikTok!',watchLabel:'Watch live',watchUrl:'https://www.tiktok.com/@beta/live'});
+ assert.equal(testPosts.length,0);
+ const queueBeforeTest=store.pending();
+ assert.match(JSON.parse(queueBeforeTest.at(-1).payload).content,/went live on TikTok!/);
+ const pausedSettings=store.get('tiktok-live:settings');
+ store.set('tiktok-live:posted:beta',{channel:otherId,message:'real-alert'});
+ const secret=env.EULER_WEBHOOK_SECRET;
+ delete env.EULER_WEBHOOK_SECRET;
+ assert.equal((await post('/api/tiktok-live/test',previewInput,{'X-CSRF-Token':'wrong'})).status,403);
+ assert.equal((await post('/api/tiktok-live/test',{...previewInput,creator:'@everyone!'})).status,400);
+ assert.equal((await post('/api/tiktok-live/test',{...previewInput,channelId:restrictedId})).status,400);
+ const testResult=await post('/api/tiktok-live/test',previewInput);
+ assert.equal(testResult.status,200);
+ assert.deepEqual(await testResult.json(),{url:'https://discord.com/channels/guild/'+otherId+'/900000000000000004'});
+ assert.deepEqual(testPosts,[{id:otherId,payload:{
+  content:'**TEST ALERT** · '+JSON.parse(queueBeforeTest.at(-1).payload).content,
+  allowedMentions:{parse:[]}
+ }}]);
+ assert.deepEqual(store.get('tiktok-live:settings'),pausedSettings);
+ assert.deepEqual(store.pending(),queueBeforeTest);
+ assert.deepEqual(store.tiktokLiveMessage('beta'),{channel:otherId,message:'real-alert'});
+ env.EULER_WEBHOOK_SECRET=secret;
  manager=false;
  assert.equal((await request('/api/tiktok-live',{headers:{cookie}})).status,403);
  assert.equal((await post('/api/tiktok-live',settings)).status,403);
+ assert.equal((await post('/api/tiktok-live/preview',previewInput)).status,403);
+ assert.equal((await post('/api/tiktok-live/test',previewInput)).status,403);
  assert.equal((await request('/api/state',{headers:{cookie}})).status,403);
  assert.equal((await post('/api/config',{minAccountDays:0})).status,403);
  assert.equal((await post('/api/logout',{})).status,200);

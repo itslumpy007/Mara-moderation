@@ -2,9 +2,15 @@
 
 #tiktok-live .form-grid{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
 #tiktok-live a{color:var(--purple)}
-#tiktok-live-status.field-error{color:#f4a8b8}
+#tiktok-live .field-error{color:#f4a8b8}
 #tiktok-live .tiktok-live-toggle{flex-direction:row;align-items:center;align-self:center}
 #tiktok-live .tiktok-live-toggle input{margin:0;flex-shrink:0}
+.tiktok-preview-tools{border-top:1px solid var(--border);margin-top:22px;padding-top:22px;display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap}
+.tiktok-preview-tools label{flex:1 1 210px;min-width:0;max-width:320px}
+.tiktok-preview-actions{display:flex;flex-wrap:wrap;gap:8px}
+#tiktok-live-preview-status:empty{display:none}
+#tiktok-live-sample{margin-top:14px}
+#tiktok-live-sample a{display:inline-block;margin-top:5px;font-size:14px}
 @media(max-width:650px){#tiktok-live .form-grid{grid-template-columns:minmax(0,1fr)}}
 
 .server-rules{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;max-height:45vh;overflow:auto;text-align:left;padding:1rem;border:1px solid #655080;border-radius:12px;}

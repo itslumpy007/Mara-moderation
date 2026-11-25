@@ -32,6 +32,20 @@ function cases(items,append=false){if(!append)el('cases').replaceChildren();for(
 function tiktokLiveMessage(text,error=false){
  const output=el('tiktok-live-status');output.textContent=text;output.classList.toggle('field-error',error);
 }
+function readTikTokCreators(){
+ return el('tiktok-live-creators').value.split(/[\r\n,]+/).map(value=>value.trim()).filter(Boolean);
+}
+function resetTikTokPreview(){
+ el('tiktok-live-sample').hidden=true;
+ const status=el('tiktok-live-preview-status');status.replaceChildren();status.classList.remove('field-error');
+}
+function updateTikTokPreviewCreators(){
+ const select=el('tiktok-live-preview-creator'),current=select.value;
+ const handles=[...new Set(readTikTokCreators().map(value=>value.toLowerCase().replace(/^@/,'')))].filter(Boolean);
+ select.replaceChildren(...(handles.length?handles.map(creator=>new Option('@'+creator,creator)):[new Option('Add a creator first','')]));
+ if(handles.includes(current))select.value=current;
+ resetTikTokPreview();
+}
 function renderTikTokLive(state){
  tiktokLiveState=state;
  const channel=el('tiktok-live-channel');
@@ -42,7 +56,7 @@ function renderTikTokLive(state){
  for(const item of state.channels)options.push(new Option('#'+item.name,item.id));
  channel.replaceChildren(...options);
  channel.value=state.channelId;
- el('tiktok-live-creators').value=state.creators.join('\n');
+ el('tiktok-live-creators').value=state.creators.join('\n');updateTikTokPreviewCreators();
  el('tiktok-live-webhook').value=state.webhookUrl;
  el('tiktok-live-enabled').checked=state.enabled;
  if(!state.providerConfigured)tiktokLiveMessage('Add EULER_WEBHOOK_SECRET in Railway to enable alerts.');
@@ -64,12 +78,42 @@ bind('tiktok-live-form','submit',async()=>{
  try{
   const saved=await api('/api/tiktok-live',{
    enabled:el('tiktok-live-enabled').checked,channelId:el('tiktok-live-channel').value,
-   creators:el('tiktok-live-creators').value.split(/[\r\n,]+/).map(value=>value.trim()).filter(Boolean)
+   creators:readTikTokCreators()
   });
   renderTikTokLive({...tiktokLiveState,...saved});
   const output=el('tiktok-live-status');output.textContent='Saved. '+output.textContent;
  }catch(error){tiktokLiveMessage(error.message,true);}
 });
+el('tiktok-live-creators').addEventListener('input',updateTikTokPreviewCreators);
+el('tiktok-live-preview-creator').addEventListener('change',resetTikTokPreview);
+el('tiktok-live-channel').addEventListener('change',resetTikTokPreview);
+async function runTikTokAlertAction(test){
+ if(!tiktokLiveState)return;
+ const creator=el('tiktok-live-preview-creator').value,channel=el('tiktok-live-channel');
+ const status=el('tiktok-live-preview-status');
+ status.replaceChildren();status.classList.remove('field-error');
+ try{
+  if(!creator)throw Error('Add a TikTok creator first.');
+  if(test){
+   if(!channel.value)throw Error('Choose a Discord alert channel first.');
+   const posted=await api('/api/tiktok-live/test',{creator,channelId:channel.value});
+   const link=document.createElement('a');link.href=posted.url;link.textContent='View test in Discord';
+   link.target='_blank';link.rel='noopener noreferrer';
+   status.append('Test alert sent. ',link);
+   return;
+  }
+  const preview=await api('/api/tiktok-live/preview',{creator});
+  if(el('tiktok-live-preview-creator').value!==creator)return;
+  const selected=tiktokLiveState.channels.find(item=>item.id===channel.value);
+  el('tiktok-live-sample-label').textContent=selected?'Preview in #'+selected.name:'Alert preview';
+  el('tiktok-live-sample-handle').textContent=preview.handle;
+  el('tiktok-live-sample-text').textContent=preview.announcement;
+  const watch=el('tiktok-live-sample-url');watch.href=preview.watchUrl;watch.textContent=preview.watchLabel;
+  el('tiktok-live-sample').hidden=false;
+ }catch(error){status.textContent=error.message;status.classList.add('field-error');}
+}
+bind('tiktok-live-preview','click',()=>runTikTokAlertAction(false));
+bind('tiktok-live-test','click',()=>runTikTokAlertAction(true));
 bind('case-search','submit',async()=>cases((await api('/api/cases?target='+encodeURIComponent(el('target').value.trim()))).cases));
 bind('older','click',async()=>cases((await api('/api/cases?target='+encodeURIComponent(el('target').value.trim())+'&before='+before)).cases,true));
 bind('logout','click',async()=>{await api('/api/logout',{});location.reload();});
