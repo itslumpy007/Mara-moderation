@@ -34,6 +34,9 @@ export function createStore(path) {
       PRIMARY KEY(guild, member, version)
     );
     CREATE INDEX IF NOT EXISTS rules_acceptances_latest ON rules_acceptances(guild, member, accepted_at);
+    CREATE TABLE IF NOT EXISTS tiktok_live_alerts (
+      creator TEXT NOT NULL, room_id TEXT NOT NULL, PRIMARY KEY(creator,room_id)
+    );
     CREATE TABLE IF NOT EXISTS outbox (
       id INTEGER PRIMARY KEY AUTOINCREMENT, channel TEXT NOT NULL, payload TEXT NOT NULL,
       private INTEGER NOT NULL DEFAULT 0, attempts INTEGER NOT NULL DEFAULT 0,
@@ -152,6 +155,15 @@ export function createStore(path) {
     revokeWarning(id, actor, reason) { return db.prepare("UPDATE cases SET revoked=1, revoked_by=?, revoke_reason=? WHERE id=? AND type='warn' AND revoked=0").run(actor,reason,id).changes === 1; },
     enqueue(channel,payload,isPrivate=false) {
       return Number(db.prepare('INSERT INTO outbox(channel,payload,private,created) VALUES (?,?,?,?)').run(channel,JSON.stringify(payload),isPrivate?1:0,Date.now()).lastInsertRowid);
+    },
+    enqueueTikTokLive(creator,roomId,channel,payload) {
+      return transaction(() => {
+        const insert = db.prepare('INSERT OR IGNORE INTO tiktok_live_alerts VALUES (?,?)').run(creator,roomId);
+        if (!insert.changes) return false;
+        if (store.queueSize() >= 10000) throw Error('Delivery queue is full.');
+        store.enqueue(channel,payload);
+        return true;
+      });
     },
     pending(now=Date.now()) { return db.prepare('SELECT * FROM outbox WHERE next_attempt <= ? ORDER BY id LIMIT 10').all(now); },
     delivered(id) { db.prepare('DELETE FROM outbox WHERE id=?').run(id); },

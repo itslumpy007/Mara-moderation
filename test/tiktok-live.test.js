@@ -1,0 +1,95 @@
+import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
+import { once } from 'node:events';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import test from 'node:test';
+import { createDashboard } from '../src/dashboard.js';
+import { createStore } from '../src/store.js';
+import { createTikTokLiveHandler, tiktokLivePath } from '../src/tiktok-live.js';
+
+const env = {
+  DASHBOARD_ENABLED:'true', TIKTOK_LIVE_ENABLED:'true',
+  TIKTOK_LIVE_CHANNEL_ID:'123456789012345678', TIKTOK_LIVE_CREATORS:'@first_creator, second.creator',
+  EULER_WEBHOOK_SECRET:'secret used only for this test',
+  PUBLIC_BASE_URL:'http://localhost:3000', CLIENT_ID:'client', DISCORD_CLIENT_SECRET:'oauth test secret'
+};
+
+async function listen(t,store,settings=env) {
+  const server = createDashboard({
+    env:settings,store,client:{isReady:()=>true},tiktokLive:createTikTokLiveHandler({env:settings,store})
+  });
+  server.listen(0,'127.0.0.1');
+  await once(server,'listening');
+  t.after(()=>new Promise(resolve=>{ server.close(resolve); server.closeAllConnections(); }));
+  return 'http://127.0.0.1:'+server.address().port+tiktokLivePath;
+}
+
+function deliver(url,body,secret=env.EULER_WEBHOOK_SECRET) {
+  const signature = createHmac('sha256',secret).update(body).digest('hex');
+  return fetch(url,{method:'POST',body,headers:{'Content-Type':'application/json','X-Webhook-Signature':signature}});
+}
+
+test('signed LIVE events from multiple creators go only to the configured channel',async t=>{
+  const store = createStore(':memory:');
+  t.after(()=>store.close());
+  const url = await listen(t,store);
+  const first = '{"unique_id":"FIRST_CREATOR","room_id":7891234567891234567}';
+  const second = '{"metadata":{"platformUsername":"second.creator"},"room_info":{"room_id":"7891234567891234568"}}';
+  const [one,two] = await Promise.all([deliver(url,first),deliver(url,second)]);
+  assert.deepEqual(await one.json(),{queued:true});
+  assert.deepEqual(await two.json(),{queued:true});
+  assert.deepEqual(await (await deliver(url,first)).json(),{queued:false});
+  const items = store.pending();
+  assert.equal(items.length,2);
+  for(const item of items) assert.equal(item.channel,env.TIKTOK_LIVE_CHANNEL_ID);
+  const payloads = items.map(item=>JSON.parse(item.payload));
+  assert.ok(payloads.some(message=>message.content.includes('https://www.tiktok.com/@first_creator/live')));
+  assert.ok(payloads.some(message=>message.content.includes('https://www.tiktok.com/@second.creator/live')));
+  assert.equal(new Set(payloads.map(message=>message.nonce)).size,2);
+  assert.deepEqual(payloads[0].allowedMentions,{parse:[]});
+  assert.equal(payloads[0].enforceNonce,true);
+  // Consecutive numeric IDs are distinct even above Number.MAX_SAFE_INTEGER.
+  assert.deepEqual(await (await deliver(url,first.replace(/4567/, '4568'))).json(),{queued:true});
+});
+
+test('unsigned, invalid and unwatched events never queue a Discord alert',async t=>{
+  const store = createStore(':memory:');
+  t.after(()=>store.close());
+  const url = await listen(t,store);
+  const valid = '{"unique_id":"first_creator","room_id":"7891234567891234567"}';
+  assert.equal((await fetch(url)).status,405);
+  assert.equal((await fetch(url,{method:'POST',body:valid})).status,401);
+  assert.equal((await deliver(url,valid,'incorrect')).status,401);
+  assert.equal((await deliver(url,'{invalid}')).status,400);
+  assert.equal((await deliver(url,JSON.stringify({event:'z'.repeat(140000)}))).status,413);
+  assert.deepEqual(await (await deliver(url,valid.replace('first_creator','outsider'))).json(),{ignored:true});
+  assert.deepEqual(await (await deliver(url,'{"is_test":true}')).json(),{ignored:true});
+  assert.deepEqual(await (await deliver(url,'{"event":"live.end",'+valid.slice(1))).json(),{ignored:true});
+  assert.equal(store.queueSize(),0);
+});
+
+test('room deduplication survives queue delivery and a database restart',async t=>{
+  const dir = mkdtempSync(join(tmpdir(),'mara-tiktok-'));
+  const path = join(dir,'test.sqlite');
+  let store = createStore(path);
+  t.after(()=>{store.close();rmSync(dir,{recursive:true});});
+  assert.equal(store.enqueueTikTokLive('first_creator','123','channel',{content:'Alert'}),true);
+  store.delivered(store.pending()[0].id);
+  store.close();
+  store = createStore(path);
+  assert.equal(store.enqueueTikTokLive('first_creator','123','channel',{content:'Duplicate'}),false);
+  assert.equal(store.queueSize(),0);
+  assert.equal(store.enqueueTikTokLive('first_creator','124','channel',{content:'Next stream'}),true);
+});
+
+test('feature is off by default and requires a channel, an allowlist and signature secret when enabled',async t=>{
+  const store = createStore(':memory:');
+  t.after(()=>store.close());
+  const url = await listen(t,store,{...env,TIKTOK_LIVE_ENABLED:'false'});
+  assert.equal((await deliver(url,'{}')).status,404);
+  assert.throws(()=>createTikTokLiveHandler({store,env:{...env,TIKTOK_LIVE_CHANNEL_ID:''}}),/TIKTOK_LIVE_CHANNEL_ID/);
+  assert.throws(()=>createTikTokLiveHandler({store,env:{...env,TIKTOK_LIVE_CREATORS:'user, bad handle'}}),/TIKTOK_LIVE_CREATORS/);
+  assert.throws(()=>createTikTokLiveHandler({store,env:{...env,EULER_WEBHOOK_SECRET:''}}),/EULER_WEBHOOK_SECRET/);
+});

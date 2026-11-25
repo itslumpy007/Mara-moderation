@@ -57,6 +57,15 @@ Staff with Moderate Members can use `/history user:@member` to see recorded join
 
 Failed welcomes stay queued across restarts and retry with increasing delays while a welcome channel is configured. Delivery checks that the member is still on the server.
 
+## TikTok LIVE alerts
+
+Mara can post one message per TikTok livestream in a Discord text channel you choose. Euler Stream’s [Community plan](https://www.eulerstream.com/pricing) lists five creator alerts. The creator list and channel are set in Railway variables.
+
+1. Keep Mara’s dashboard enabled and reachable over HTTPS. Choose the Discord channel and give Mara View Channel and Send Messages there.
+2. In Railway, set `TIKTOK_LIVE_CHANNEL_ID` to that channel’s ID, `TIKTOK_LIVE_CREATORS` to a comma-separated list such as `@creator_one,creator.two`, and `EULER_WEBHOOK_SECRET` to the account webhook secret from the Euler Stream dashboard. Set `TIKTOK_LIVE_ENABLED=true` to enable the endpoint.
+3. In Euler Stream, [create a LIVE alert](https://www.eulerstream.com/docs/sign-server/live-alerts) for each selected creator. Point each alert’s target at `<PUBLIC_BASE_URL>/webhooks/tiktok-live`. In the target metadata, set `platformUsername` to that creator’s TikTok handle to identify deliveries that omit the handle.
+4. Verify the first live alert in the selected channel. Mara queues signed alerts before acknowledging them and ignores repeat deliveries for the same livestream.
+
 ## Railway
 
 Deploy this repository using its Dockerfile. Add a persistent volume at `/data` and set `DATA_DIR=/data`, together with the Discord settings from `.env`. Use one replica and leave Serverless off. Stop any local copy before starting Railway. Look for `Mara online as ...` in deployment logs.

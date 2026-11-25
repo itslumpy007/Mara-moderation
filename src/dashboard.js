@@ -3,6 +3,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { PermissionFlagsBits as P } from 'discord.js';
 import { config, configurableIds, saveConfig } from './config.js';
+import { tiktokLivePath } from './tiktok-live.js';
 import { rulesVersion } from './verification.js';
 import { settings, validateAutomod } from './automod.js';
 
@@ -21,7 +22,7 @@ export async function validateChallenge(response,env,fetchImpl=fetch) {
   const result=await res.json();
   if(!result.success||result.hostname!==new URL(env.PUBLIC_BASE_URL).hostname||result.action!=='mara_verify') throw Error('CAPTCHA failed or expired. Refresh the challenge.');
 }
-export function createDashboard({client,store,env,verification,audit,fetchImpl=fetch,now=Date.now}) {
+export function createDashboard({client,store,env,verification,audit,tiktokLive,fetchImpl=fetch,now=Date.now}) {
   const origin=new URL(env.PUBLIC_BASE_URL);
   if(origin.protocol!=='https:'&&!['localhost','127.0.0.1'].includes(origin.hostname)) throw Error('PUBLIC_BASE_URL must use HTTPS.');
   if(origin.username||origin.password||origin.pathname!=='/'||origin.search||origin.hash) throw Error('PUBLIC_BASE_URL must be a plain origin, without a path.');
@@ -48,6 +49,10 @@ export function createDashboard({client,store,env,verification,audit,fetchImpl=f
       rate.count++; rates.set(ip,rate);
       if(rate.count>180) return json(res,429,{error:'Too many requests. Try again in one minute.'});
       if(url.pathname==='/health') return json(res,client.isReady()?200:503,{ready:client.isReady()});
+      if(url.pathname===tiktokLivePath) {
+        if(!tiktokLive) return json(res,404,{error:'Not found.'});
+        return await tiktokLive(req,res);
+      }
       const files={'/blacklisted-logo.png':'blacklisted-logo.png','/':'index.html','/verify':'verify.html','/app.js':'app.js','/verify.js':'verify.js','/style.css':'style.css'};
       if(req.method==='GET'&&Object.hasOwn(files,url.pathname)) {
         const file=files[url.pathname];

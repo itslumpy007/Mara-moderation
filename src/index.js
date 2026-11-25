@@ -18,6 +18,7 @@ import { createTickets } from './tickets.js';
 import { createStaffTools } from './staff-tools.js';
 import { createRaidGuard } from './raid.js';
 import { createDashboard } from './dashboard.js';
+import { createTikTokLiveHandler } from './tiktok-live.js';
 import { escalateWarning } from './escalation.js';
 for (const key of ['DISCORD_TOKEN','GUILD_ID']) if (!process.env[key]) throw new Error(`Missing ${key}`);
 if (process.env.RAILWAY_ENVIRONMENT_ID && process.env.DATA_DIR !== '/data') throw new Error('Set DATA_DIR=/data and attach a Railway volume at /data.');
@@ -48,9 +49,10 @@ const flushWelcomes=()=>onboarding.flush().catch(()=>console.error('Welcome queu
 const tickets=createTickets({store,env,client,audit,ai,dataDir});
 const staffTools=createStaffTools({store,env,audit,backupNow,verification,tickets});
 const raidGuard=createRaidGuard({store,audit});
+const tiktokLive = createTikTokLiveHandler({env,store});
 let dashboard;
 if(env.DASHBOARD_ENABLED==='true') {
-  dashboard=createDashboard({client,store,env,verification,audit});
+  dashboard=createDashboard({client,store,env,verification,audit,tiktokLive});
   dashboard.listen(Number(env.PORT||3000),'0.0.0.0',()=>console.log('Mara dashboard listening.'));
 }
 const moderate = createAutomod({ store, env, audit, ai });
