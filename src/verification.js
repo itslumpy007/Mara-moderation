@@ -21,23 +21,54 @@ export function createVerification({store,env,audit}) {
     const role=await unverifiedRole(member);
     await member.roles.remove(role,'Completed verification');
   }
-  async function grant(member,{staff=false,actor='self',captchaPassed=false}={}) {
+  async function grant(member,{staff=false,actor='self',captchaPassed=false,acceptedVersion}={}) {
     if(locks.has(member.id)) throw Error('Verification is already being processed.');
     locks.add(member.id);
     try {
-      const cfg=config(store), guild=member.guild;
-      const role=await guild.roles.fetch(env.VERIFIED_ROLE_ID||'0').catch(()=>null);
-      const problem=verificationProblem(role,await guild.members.fetchMe()); if(problem) throw Error(problem);
-      if(member.roles.cache.has(role.id)) { await removeUnverified(member); return 'You are already verified.'; }
-      if(!staff) {
-        const gate=verificationGate(member,cfg,store.get('raid:pausedUntil',0)); if(gate) throw Error(gate);
-        if(cfg.captcha&&!captchaPassed) throw Error('Complete the verification challenge first.');
+      const guild = member.guild;
+      member = await guild.members.fetch({ user: member.id, force: true });
+      const role = await guild.roles.fetch(env.VERIFIED_ROLE_ID || '0').catch(() => null);
+      const problem = verificationProblem(role, await guild.members.fetchMe());
+      if (problem) throw Error(problem);
+
+      const joinedAt = member.joinedTimestamp ?? 0;
+      const journalKey = 'verification-grant:' + guild.id + ':' + member.id;
+      let grant = store.get(journalKey);
+      const alreadyVerified = member.roles.cache.has(role.id);
+      const recovering = alreadyVerified && grant?.joinedAt === joinedAt && grant.roleId === role.id;
+      const cfg = config(store);
+      const currentRulesAccepted = !staff && cfg.verificationRules.trim() &&
+        acceptedVersion === rulesVersion(cfg.verificationRules);
+      const acceptance = currentRulesAccepted && (!cfg.captcha || captchaPassed)
+        ? { version: acceptedVersion, rules: cfg.verificationRules, acceptedAt: Date.now() } : undefined;
+      if (!recovering) {
+        if (!staff) {
+          if (!currentRulesAccepted) throw Error('Refresh and read the current server rules before accepting.');
+          if (!acceptance) throw Error('Complete the verification challenge first.');
+          if (!alreadyVerified) {
+            const gate = verificationGate(member, cfg, store.get('raid:pausedUntil', 0));
+            if (gate) throw Error(gate);
+          }
+        }
+        if (alreadyVerified) {
+          await removeUnverified(member);
+          store.finishVerification({ guild: guild.id, member: member.id, joinedAt, acceptance, time: Date.now() });
+          return 'You are already verified.';
+        }
+
+        // Save the verified request before calling Discord so a retry can finish a partial grant.
+        const reason = staff ? 'Staff approved verification' : 'Rules accepted' + (captchaPassed ? ' and CAPTCHA completed' : '');
+        grant = { joinedAt, roleId: role.id, actor, reason, staff, acceptance };
+        store.set(journalKey, grant);
+        member = await member.roles.add(role, staff ? 'Staff verification approval by ' + actor : 'Accepted rules and completed verification');
       }
-      await member.roles.add(role,staff?'Staff verification approval by '+actor:'Accepted rules and completed verification');
+
       await removeUnverified(member);
-      store.delete('verify-review:'+member.id);
-      store.addCase({type:'verify',target:member.id,actor,reason:staff?'Staff approved verification':'Rules accepted'+(captchaPassed?' and CAPTCHA completed':'')});
-      await audit(guild,'Rules accepted: '+member.user.tag+' | '+member.id);
+      store.finishVerification({
+        guild: guild.id, member: member.id, joinedAt, actor: grant.actor, reason: grant.reason,
+        acceptance: grant.acceptance, acceptedSinceGrant: recovering ? acceptance : undefined, journalKey, time: Date.now()
+      });
+      await audit(guild, grant.staff ? 'Staff approved verification for ' + member.id : 'Rules accepted: ' + member.user.tag + ' | ' + member.id);
       return 'You’re verified. Welcome to The Blacklisted.';
     } finally {locks.delete(member.id);}
   }

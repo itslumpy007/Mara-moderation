@@ -35,6 +35,27 @@ test('setup check detects public logs, missing embeds and distinguishes volume c
   assert.match(card.fields.at(-1).value,/Confirm a volume/);
 });
 
+test('setup check reports broken role and channel access and reports ready after repair', async () => {
+  const me=bot();
+  let repaired=false;
+  const channel={
+    id:'123', type:ChannelType.GuildText,
+    permissionsFor:member=>new PermissionsBitField(member===me&&repaired?[P.ViewChannel,P.SendMessages,P.EmbedLinks]:[])
+  };
+  const guild={
+    channels:{fetch:async()=>channel},
+    roles:{fetch:async()=>repaired?role():{...role(),position:6},everyone:{}}
+  };
+  const env={WELCOME_CHANNEL_ID:'123',LOG_CHANNEL_ID:'123',VERIFIED_ROLE_ID:'role'};
+  const broken=await setupCheck(guild,env,me);
+  assert.match(broken.fields[1].value,/Missing permissions: ViewChannel, SendMessages, EmbedLinks/);
+  assert.match(broken.fields[2].value,/highest role above/);
+  repaired=true;
+  const ready=await setupCheck(guild,env,me);
+  assert.match(ready.fields[1].value,/Ready to send/);
+  assert.match(ready.fields[2].value,/Ready to assign/);
+});
+
 test('new commands default to the appropriate staff permissions',()=>{
   assert.equal(commands.find(c=>c.name==='setup-check').default_member_permissions,String(P.ManageGuild));
   assert.equal(commands.find(c=>c.name==='untimeout').default_member_permissions,String(P.ModerateMembers));

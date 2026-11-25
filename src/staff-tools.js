@@ -71,7 +71,17 @@ export function createStaffTools({store,env,audit,backupNow,verification,tickets
     else if(n==='backup') result='Backup saved: '+await backupNow()+'. It is on the data volume; download it through Railway for an off-volume copy.';
     else if(['case','history','warn-remove'].includes(n)) {
       if(!actor.permissions.has(P.ModerateMembers)) throw Error('Moderate Members is required.');
-      if(n==='history') result=store.cases({target:o.getUser('user',true).id,before:o.getInteger('before')||undefined,limit:10}).map(c=>caseText(c).slice(0,175)).join('\n\n')||'No cases. Use before:<oldest case number> for the next page.';
+      if(n==='history') {
+        const target=o.getUser('user',true).id, before=o.getInteger('before')||undefined;
+        const history=store.cases({target,before,limit:before?10:8}).map(c=>caseText(c).slice(0,175)).join('\n\n')||'No cases.';
+        const onboarding=before?null:store.onboarding(i.guild.id,target);
+        const acceptance=before?null:store.latestRulesAcceptance(i.guild.id,target);
+        const date=value=>value==null?'—':'<t:'+Math.floor(value/1000)+':f>';
+        const status=onboarding?'Joined '+date(onboarding.joined_at)+' · Welcomed '+date(onboarding.welcomed_at)+
+          ' · Verified '+date(onboarding.verified_at)+(onboarding.left_at?' · Left '+date(onboarding.left_at):''):'';
+        const accepted=acceptance?'Rules '+acceptance.version+' accepted '+date(acceptance.accepted_at):'';
+        result=[status,accepted,history,'Use before:<oldest case number> for the next page.'].filter(Boolean).join('\n\n');
+      }
       else {
         const c=store.case(o.getInteger('number',true)); if(!c) throw Error('Case not found.');
         if(n==='case') result=caseText(c);

@@ -1,4 +1,4 @@
-import { sendWelcome } from './welcome.js';
+import { createOnboarding } from './onboarding.js';
 import { panelTargetId } from './panel-target.js';
 import { postRulesPanel } from './rules.js';
 import { mkdirSync } from 'node:fs';
@@ -41,6 +41,10 @@ async function audit(g,text) {
 }
 const moderationConfirmation=createModerationConfirmation({store,audit});
 const verification=createVerification({store,env,audit});
+const onboarding=createOnboarding({
+  store, env, client, fetchChannel: textChannel
+});
+const flushWelcomes=()=>onboarding.flush().catch(()=>console.error('Welcome queue processing failed.'));
 const tickets=createTickets({store,env,client,audit,ai,dataDir});
 const staffTools=createStaffTools({store,env,audit,backupNow,verification,tickets});
 const raidGuard=createRaidGuard({store,audit});
@@ -79,7 +83,7 @@ client.on('interactionCreate',async i => {
         if(env.DASHBOARD_ENABLED!=='true'||!env.PUBLIC_BASE_URL) throw Error('Verification website is unavailable. Ask staff for help.');
         return await i.editReply({content:'Rules accepted. Continue with Discord on Mara’s verification page to complete the CAPTCHA.',components:[{type:1,components:[{type:2,style:5,label:'Verify with Mara',url:new URL('/verify',env.PUBLIC_BASE_URL).href}]}]});
       }
-      return await i.editReply(await verification.grant(actor));
+      return await i.editReply(await verification.grant(actor,{acceptedVersion:i.customId.slice('verify-accept:'.length)}));
     }
     const n=i.commandName, o=i.options;
     const reason=o.getString('reason');
@@ -234,19 +238,26 @@ client.on('messageReactionAdd',(r,u)=>reactionRole(r,u,true).catch(()=>console.e
 client.on('messageReactionRemove',(r,u)=>reactionRole(r,u,false).catch(()=>console.error('Reaction role failed.')));
 client.on('guildMemberAdd',async m=>{
   if(!allowed(m.guild)) return;
+  onboarding.join(m);
   await audit(m.guild,`JOIN | ${m.user.tag} | ${m.id}`);
   await verification.assignUnverified(m).catch(async()=>{console.error('Unverified role assignment failed. Check role configuration and permissions.');await audit(m.guild,'Unverified role assignment failed for '+m.id+'. Check /config and role hierarchy.');});
   await raidGuard(m).catch(()=>console.error('Raid check failed.'));
-  if(env.WELCOME_CHANNEL_ID) await textChannel(m.guild,env.WELCOME_CHANNEL_ID).then(c=>sendWelcome(c,m,config(store).welcomeText)).catch(()=>console.error('Welcome failed.'));
+  void flushWelcomes();
 });
-client.on('guildMemberRemove',m=>{if(allowed(m.guild)) void audit(m.guild,`LEAVE | ${m.user.tag} | ${m.id}`);});
+client.on('guildMemberRemove',m=>{
+  if(!allowed(m.guild)) return;
+  onboarding.leave(m);
+  void audit(m.guild,`LEAVE | ${m.user.tag} | ${m.id}`);
+});
 client.on('messageDelete',m=>{if(allowed(m.guild)&&!m.author?.bot&&m.channelId!==env.LOG_CHANNEL_ID) void audit(m.guild,`DELETE | channel ${m.channelId} | message ${m.id} | author ${m.author?.id||'uncached'}\n${m.content||'[content unavailable]'}`);});
 client.on('messageUpdate',(a,b)=>{if(allowed(b.guild)&&!b.author?.bot&&b.channelId!==env.LOG_CHANNEL_ID&&a.content!==b.content) void audit(b.guild,`EDIT | channel ${b.channelId} | message ${b.id}\nBefore: ${(a.content||'[uncached]').slice(0,850)}\nAfter: ${(b.content||'[unavailable]').slice(0,850)}`);});
 const timers=[];
 client.once('clientReady',c=>{
   console.log(`Mara online as ${c.user.tag}`);
   void backupNow().catch(()=>console.error('Startup backup failed.'));
+  void flushWelcomes();
   void delivery.flush().catch(()=>console.error('Delivery queue processing failed.'));
+  timers.push(setInterval(()=>{void flushWelcomes();},15000));
   timers.push(setInterval(()=>{void delivery.flush().catch(()=>console.error('Delivery queue processing failed.'));},15000));
   timers.push(setInterval(()=>{void backupNow().catch(()=>console.error('Scheduled backup failed.'));},86400000));
   void c.guilds.fetch(env.GUILD_ID).then(g=>g.members.fetchMe().then(me=>setupCheck(g,env,me))).then(card=>console.log('Startup checks:',card.fields.map(f=>f.name+': '+f.value).join(' | '))).catch(()=>console.error('Startup checks failed. Run /setup-check.'));

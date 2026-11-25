@@ -96,7 +96,7 @@ export function createDashboard({client,store,env,verification,audit,fetchImpl=f
         const cfg=config(store);
         if(!cfg.verificationRules.trim() || body.rulesVersion!==rulesVersion(cfg.verificationRules)) throw Error('Refresh and read the current server rules before accepting.');
         if(cfg.captcha) await validateChallenge(body.token,env,fetchImpl);
-        const result=await verification.grant(member,{captchaPassed:cfg.captcha});
+        const result=await verification.grant(member,{captchaPassed:cfg.captcha,acceptedVersion:body.rulesVersion});
         return json(res,200,{message:result});
       }
       if(req.method==='POST'&&url.pathname==='/api/review') return json(res,200,{message:await verification.request(member)});

@@ -53,6 +53,10 @@ New members receive a purple welcome card with their avatar, the server icon, me
 
 Use `/welcome` to privately preview the card, or `/welcome text:...` to customize the greeting with `{user}`, `{server}`, and `{count}`. Existing custom greetings are preserved.
 
+Staff with Moderate Members can use `/history user:@member` to see recorded join, welcome, verification and rules acceptance dates. Records begin with this release, and include the latest tracked membership. Mara saves the text and timestamp for each rules version a member accepts through Discord or the verification website. Staff approvals are recorded separately from member acceptance.
+
+Failed welcomes stay queued across restarts and retry with increasing delays while a welcome channel is configured. Delivery checks that the member is still on the server.
+
 ## Railway
 
 Deploy this repository using its Dockerfile. Add a persistent volume at `/data` and set `DATA_DIR=/data`, together with the Discord settings from `.env`. Use one replica and leave Serverless off. Stop any local copy before starting Railway. Look for `Mara online as ...` in deployment logs.

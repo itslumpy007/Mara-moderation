@@ -12,13 +12,13 @@ export function privateChannel(channel,guild,staffRoleId,botId) {
   }
   return true;
 }
-export function createDelivery({store,client,env}) {
+export function createDelivery({store,client,env,now=Date.now}) {
   let busy=false;
   async function flush() {
     if(busy||!client.isReady()) return;
     busy=true;
     try {
-      for(const item of store.pending()) {
+      for(const item of store.pending(now())) {
         try {
           const guild=await client.guilds.fetch(env.GUILD_ID);
           const channel=await guild.channels.fetch(item.channel);
@@ -33,7 +33,7 @@ export function createDelivery({store,client,env}) {
           }
           await channel.send({...payload,allowedMentions:{parse:[]}});
           store.delivered(item.id);
-        } catch { store.failed(item.id,item.attempts+1); store.set('health:delivery',{time:Date.now(),message:'Delivery pending. Check channel access and staff-only permissions.'}); }
+        } catch { store.failed(item.id,item.attempts+1,now()); store.set('health:delivery',{time:now(),message:'Delivery pending. Check channel access and staff-only permissions.'}); }
       }
     } finally { busy=false; }
   }

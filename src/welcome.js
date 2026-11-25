@@ -37,13 +37,13 @@ export async function makeWelcome(member,template) {
   return welcomePayload(member,template,{rules:find('rules'),verification:find('verification')});
 }
 
-export async function sendWelcome(channel,member,template) {
+export async function sendWelcome(channel,member,template,deliveryOptions={}) {
   const me=await member.guild.members.fetchMe();
   if(!channel.permissionsFor(me)?.has([P.ViewChannel,P.SendMessages]))throw Error('Mara cannot post in the welcome channel.');
   const payload=await makeWelcome(member,template);
   if(!channel.permissionsFor(me).has(P.EmbedLinks)) {
     const steps=payload.embeds[0].fields.map(f=>f.name+'\n'+f.value).join('\n\n');
-    return channel.send({content:(payload.content+'\n\n'+payload.embeds[0].description+'\n\n'+steps).slice(0,2000),allowedMentions:payload.allowedMentions});
+    return channel.send({content:(payload.content+'\n\n'+payload.embeds[0].description+'\n\n'+steps).slice(0,2000),allowedMentions:payload.allowedMentions,...deliveryOptions});
   }
-  return channel.send(payload);
+  return channel.send({...payload,...deliveryOptions});
 }

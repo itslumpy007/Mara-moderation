@@ -16,6 +16,24 @@ export function createStore(path) {
       expires INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'pending'
     );
     CREATE INDEX IF NOT EXISTS moderation_requests_expiry ON moderation_requests(expires);
+    CREATE TABLE IF NOT EXISTS onboarding (
+      guild TEXT NOT NULL, member TEXT NOT NULL, joined_at INTEGER NOT NULL,
+      welcomed_at INTEGER, verified_at INTEGER, left_at INTEGER,
+      welcome_pending INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0,
+      next_attempt INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY(guild, member)
+    );
+    CREATE INDEX IF NOT EXISTS onboarding_pending
+      ON onboarding(guild, welcome_pending, next_attempt) WHERE left_at IS NULL;
+    CREATE TABLE IF NOT EXISTS rules_versions (
+      guild TEXT NOT NULL, version TEXT NOT NULL, rules TEXT NOT NULL,
+      PRIMARY KEY(guild, version)
+    );
+    CREATE TABLE IF NOT EXISTS rules_acceptances (
+      guild TEXT NOT NULL, member TEXT NOT NULL, version TEXT NOT NULL, accepted_at INTEGER NOT NULL,
+      PRIMARY KEY(guild, member, version)
+    );
+    CREATE INDEX IF NOT EXISTS rules_acceptances_latest ON rules_acceptances(guild, member, accepted_at);
     CREATE TABLE IF NOT EXISTS outbox (
       id INTEGER PRIMARY KEY AUTOINCREMENT, channel TEXT NOT NULL, payload TEXT NOT NULL,
       private INTEGER NOT NULL DEFAULT 0, attempts INTEGER NOT NULL DEFAULT 0,
@@ -23,12 +41,78 @@ export function createStore(path) {
     );
   `);
   const addCase = ({type,target,actor,reason,created=new Date().toISOString()}) => Number(db.prepare('INSERT INTO cases(type,target,actor,reason,created) VALUES (?,?,?,?,?)').run(type,target,actor,reason,created).lastInsertRowid);
+  function recordJoin(guild, member, joinedAt, welcomePending) {
+    db.prepare(`INSERT INTO onboarding(guild,member,joined_at,welcome_pending) VALUES (?,?,?,?)
+      ON CONFLICT(guild,member) DO UPDATE SET joined_at=excluded.joined_at,
+        welcomed_at=NULL, verified_at=NULL, left_at=NULL, welcome_pending=excluded.welcome_pending,
+        attempts=0, next_attempt=0
+      WHERE excluded.joined_at>onboarding.joined_at`).run(guild,member,joinedAt,Number(welcomePending));
+  }
+  function recordRulesAcceptance(guild, member, acceptance) {
+    if (!acceptance) return;
+    db.prepare('INSERT OR IGNORE INTO rules_versions VALUES (?,?,?)').run(guild,acceptance.version,acceptance.rules);
+    db.prepare('INSERT OR IGNORE INTO rules_acceptances VALUES (?,?,?,?)')
+      .run(guild,member,acceptance.version,acceptance.acceptedAt);
+  }
+  function markVerified(guild,member,joinedAt,time) {
+    recordJoin(guild,member,joinedAt,false);
+    db.prepare(`UPDATE onboarding SET verified_at=COALESCE(verified_at,?)
+      WHERE guild=? AND member=? AND joined_at=? AND left_at IS NULL`).run(time,guild,member,joinedAt);
+  }
+  function transaction(work) {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const result = work();
+      db.exec('COMMIT');
+      return result;
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
+  }
   const store = {
     get(key, fallback = null) { const row = db.prepare('SELECT value FROM kv WHERE key=?').get(key); return row ? JSON.parse(row.value) : fallback; },
     set(key, value) { db.prepare('INSERT INTO kv VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key, JSON.stringify(value)); },
     list(prefix) { return db.prepare('SELECT key,value FROM kv WHERE substr(key,1,?)=?').all(prefix.length,prefix).map(r=>({key:r.key,value:JSON.parse(r.value)})); },
     delete(key) { db.prepare('DELETE FROM kv WHERE key=?').run(key); },
     addCase,
+    recordJoin,
+    recordDeparture(guild,member,joinedAt,time) {
+      db.prepare(`UPDATE onboarding SET left_at=?, welcome_pending=0
+        WHERE guild=? AND member=? AND joined_at=? AND left_at IS NULL`).run(time,guild,member,joinedAt);
+    },
+    onboarding(guild,member) {
+      return db.prepare('SELECT * FROM onboarding WHERE guild=? AND member=?').get(guild,member);
+    },
+    dueWelcomes(guild, now) {
+      return db.prepare(`SELECT * FROM onboarding WHERE guild=? AND welcome_pending=1
+        AND left_at IS NULL AND next_attempt<=? ORDER BY next_attempt,joined_at LIMIT 10`).all(guild,now);
+    },
+    welcomeSent({guild,member,joined_at},time) {
+      db.prepare(`UPDATE onboarding SET welcomed_at=?, welcome_pending=0
+        WHERE guild=? AND member=? AND joined_at=? AND left_at IS NULL`).run(time,guild,member,joined_at);
+    },
+    postponeWelcome({guild,member,joined_at,attempts},time) {
+      const delay = Math.min(3600000,15000*2**Math.min(attempts,8));
+      db.prepare(`UPDATE onboarding SET next_attempt=?, attempts=attempts+1
+        WHERE guild=? AND member=? AND joined_at=? AND welcome_pending=1`).run(time+delay,guild,member,joined_at);
+    },
+    latestRulesAcceptance(guild,member) {
+      return db.prepare(`SELECT version,accepted_at FROM rules_acceptances WHERE guild=? AND member=?
+        ORDER BY accepted_at DESC,rowid DESC LIMIT 1`).get(guild,member);
+    },
+    finishVerification({guild,member,joinedAt,actor,reason,acceptance,acceptedSinceGrant,journalKey,time}) {
+      return transaction(() => {
+        recordRulesAcceptance(guild,member,acceptance);
+        recordRulesAcceptance(guild,member,acceptedSinceGrant);
+        markVerified(guild,member,joinedAt,time);
+        store.delete('verify-review:'+member);
+        if (journalKey) {
+          addCase({type:'verify',target:member,actor,reason,created:new Date(time).toISOString()});
+          store.delete(journalKey);
+        }
+      });
+    },
     createModerationRequest({id,guild,actor,target,type,reason,expires}) {
       db.prepare('DELETE FROM moderation_requests WHERE expires <= ?').run(expires - 86400000);
       db.prepare('INSERT INTO moderation_requests(id,guild,actor,target,type,reason,expires) VALUES (?,?,?,?,?,?,?)')
@@ -71,7 +155,7 @@ export function createStore(path) {
     },
     pending(now=Date.now()) { return db.prepare('SELECT * FROM outbox WHERE next_attempt <= ? ORDER BY id LIMIT 10').all(now); },
     delivered(id) { db.prepare('DELETE FROM outbox WHERE id=?').run(id); },
-    failed(id, attempts) { db.prepare('UPDATE outbox SET attempts=?, next_attempt=? WHERE id=?').run(attempts,Date.now()+Math.min(3600000,15000*2**Math.min(attempts,8)),id); },
+    failed(id, attempts, now=Date.now()) { db.prepare('UPDATE outbox SET attempts=?, next_attempt=? WHERE id=?').run(attempts,now+Math.min(3600000,15000*2**Math.min(attempts,8)),id); },
     queueSize() { return db.prepare('SELECT count(*) AS n FROM outbox').get().n; },
     backup(destination) { return backup(db,destination); },
     close() { db.close(); }
